@@ -105,24 +105,18 @@
         }
     };
 
-    // Реєстрація
+    // Реєстрація компонента
     if (typeof Lampa !== 'undefined' && Lampa.Component && Lampa.Component.add) {
         Lampa.Component.add('online', component);
-        console.log('Uakino: Компонент зареєстровано');
+        console.log('Uakino: Компонент зареєстровано як "online"');
+
+        // Додаткове повідомлення для перевірки
+        if (Lampa.Online) {
+            Lampa.Online.add(component);
+            console.log('Uakino: Додано через Lampa.Online');
+        }
     } else {
         console.error('Uakino: Lampa.Component.add недоступний');
-    }
-
-    // Налаштування
-    if (typeof Lampa.Settings !== 'undefined' && Lampa.Settings.add) {
-        Lampa.Settings.add('online_sources', {
-            id: 'uakino',
-            name: 'Uakino',
-            enabled: true
-        });
-        console.log('Uakino: Додано в налаштування');
-    } else {
-        console.error('Uakino: Lampa.Settings.add недоступний');
     }
 
     console.log('Uakino: Завантаження завершено');
