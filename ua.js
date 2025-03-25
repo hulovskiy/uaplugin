@@ -98,24 +98,12 @@
         }
     };
 
-    // Реєстрація компонента як у online_mod.js
+    // Реєстрація компонента
     if (typeof Lampa !== 'undefined' && Lampa.Component && Lampa.Component.add) {
         Lampa.Component.add('online', Uakino);
         console.log('Uakino: Компонент зареєстровано як "online"');
     } else {
         console.error('Uakino: Lampa.Component.add недоступний');
-    }
-
-    // Додавання в налаштування як у online_mod.js
-    if (typeof Lampa !== 'undefined' && Lampa.Settings && Lampa.Settings.add) {
-        Lampa.Settings.add('online', {
-            id: 'uakino',
-            name: 'Uakino',
-            enabled: true
-        });
-        console.log('Uakino: Додано в налаштування');
-    } else {
-        console.error('Uakino: Lampa.Settings.add недоступний');
     }
 
     console.log('Uakino: Завантаження завершено');
