@@ -13,11 +13,13 @@
         var files = new Lampa.Explorer(object);
         var filter = new Lampa.Filter(object);
         var initialized = false;
-
         var last;
 
         // Ініціалізація
         this.initialize = function () {
+            if (initialized) return; // Запобігаємо повторній ініціалізації
+            initialized = true;
+
             this.loading(true);
             filter.onSearch = function (value) {
                 Lampa.Activity.replace({
@@ -25,7 +27,7 @@
                     clarification: true
                 });
             };
-            filter.onBack = this.start.bind(this);
+            filter.onBack = this.back.bind(this); // Змінено на back для уникнення рекурсії
             scroll.body().addClass('torrent-list');
             files.appendFiles(scroll.render());
             files.appendHead(filter.render());
@@ -33,8 +35,7 @@
             scroll.body().append(Lampa.Template.get('uakino_content_loading'));
             Lampa.Controller.enable('content');
             this.loading(false);
-            this.search();
-            initialized = true;
+            this.search(); // Пошук запускається один раз
         };
 
         // Пошук
@@ -187,6 +188,7 @@
             if (!initialized) {
                 this.initialize();
             }
+            Lampa.Background.immediately(Lampa.Utils.cardImgBackgroundBlur(object.movie));
             Lampa.Controller.add('content', {
                 toggle: function () {
                     Lampa.Controller.collectionSet(scroll.render(), files.render());
