@@ -5,8 +5,14 @@
     var Uakino = {
         base_url: 'https://uakino.me',
 
+        // Ініціалізація (як у online_mod.js)
+        init: function () {
+            console.log('Uakino: Ініціалізація плагіну');
+        },
+
+        // Функція пошуку
         search: function (query, callback) {
-            console.log('Uakino: Починаємо пошук для:', query);
+            console.log('Uakino: Пошук:', query);
             var url = this.base_url + '/search?q=' + encodeURIComponent(query);
             network.silent(url, function (result) {
                 console.log('Uakino: Отримано відповідь пошуку');
@@ -27,8 +33,8 @@
                             });
                         }
                     });
-                    console.log('Uakino: Знайдено елементів:', items.length);
-                    callback(items.length ? items : []);
+                    console.log('Uakino: Знайдено:', items.length, 'елементів');
+                    callback(items);
                 } catch (e) {
                     console.error('Uakino: Помилка парсингу пошуку:', e);
                     callback([]);
@@ -39,8 +45,9 @@
             });
         },
 
+        // Функція парсингу сторінки
         parse: function (url, callback) {
-            console.log('Uakino: Парсимо сторінку:', url);
+            console.log('Uakino: Парсинг:', url);
             network.silent(url, function (result) {
                 try {
                     var html = $('<div>').html(result);
@@ -80,10 +87,10 @@
                         title: html.find('h1').text().trim() || 'Без назви',
                         seasons: seasons.length ? seasons : null
                     };
-                    console.log('Uakino: Отримано дані:', content);
+                    console.log('Uakino: Дані:', content);
                     callback(content);
                 } catch (e) {
-                    console.error('Uakino: Помилка парсингу сторінки:', e);
+                    console.error('Uakino: Помилка парсингу:', e);
                     callback(null);
                 }
             }, function () {
@@ -93,33 +100,39 @@
         }
     };
 
-    // Реєстрація компонента як 'online' (як у online_mod.js)
+    // Реєстрація як у online_mod.js
+    var component = {
+        name: 'Uakino', // Назва для відображення
+        init: function () {
+            Uakino.init();
+        },
+        search: function (query, callback) {
+            Uakino.search(query, callback);
+        },
+        parse: function (url, callback) {
+            Uakino.parse(url, callback);
+        }
+    };
+
+    // Додаємо компонент
     try {
-        Lampa.Component.add('online', {
-            name: 'Uakino', // Назва, що відображається в Lampa
-            search: function (query, callback) {
-                Uakino.search(query, callback);
-            },
-            parse: function (url, callback) {
-                Uakino.parse(url, callback);
-            }
-        });
-        console.log('Uakino: Компонент зареєстровано як "online"');
+        Lampa.Component.add('online', component);
+        console.log('Uakino: Компонент додано як "online"');
     } catch (e) {
-        console.error('Uakino: Помилка реєстрації компонента:', e);
+        console.error('Uakino: Помилка додавання компонента:', e);
     }
 
-    // Додавання в налаштування з унікальним ідентифікатором
+    // Додаємо в налаштування
     try {
-        Lampa.Settings.add('source', {
-            id: 'uakino_source', // Унікальний ID для вашого джерела
+        Lampa.Settings.add('online_sources', {
+            id: 'uakino',
             name: 'Uakino',
             enabled: true
         });
-        console.log('Uakino: Додано в налаштування як "Uakino"');
+        console.log('Uakino: Додано в налаштування');
     } catch (e) {
-        console.error('Uakino: Помилка додавання в налаштування:', e);
+        console.error('Uakino: Помилка налаштувань:', e);
     }
 
-    console.log('Uakino: Плагін успішно завантажено');
+    console.log('Uakino: Плагін завантажено');
 })();
