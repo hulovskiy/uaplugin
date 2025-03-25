@@ -3,19 +3,16 @@
 
     // Об’єкт для роботи з uakino.me
     var Uakino = {
-        base_url: 'https://uakino.me', // Базовий URL сайту
+        base_url: 'https://uakino.me',
 
-        // Функція пошуку
         search: function (query, callback) {
             console.log('Uakino: Починаємо пошук для:', query);
-            // Припускаємо, що пошук на uakino.me виглядає як /search?q=запит
             var url = this.base_url + '/search?q=' + encodeURIComponent(query);
             network.silent(url, function (result) {
                 console.log('Uakino: Отримано відповідь пошуку');
                 var items = [];
                 try {
                     var html = $('<div>').html(result);
-                    // Припускаємо, що результати пошуку мають клас .shortstory або подібний
                     html.find('.shortstory').each(function () {
                         var titleElement = $(this).find('.shortstory-title a');
                         var title = titleElement.text().trim() || 'Без назви';
@@ -42,18 +39,16 @@
             });
         },
 
-        // Функція парсингу сторінки контенту
         parse: function (url, callback) {
             console.log('Uakino: Парсимо сторінку:', url);
             network.silent(url, function (result) {
                 try {
                     var html = $('<div>').html(result);
                     var video_urls = [];
-                    // Шукаємо відео в плеєрі (припускаємо типовий тег <source>)
                     html.find('#player video source').each(function () {
                         var src = $(this).attr('src');
                         if (src) {
-                            var quality = $(this).attr('data-quality') || '1080p'; // За замовчуванням 1080p
+                            var quality = $(this).attr('data-quality') || '1080p';
                             video_urls.push({
                                 quality: quality,
                                 url: src.startsWith('http') ? src : Uakino.base_url + src
@@ -61,7 +56,6 @@
                         }
                     });
 
-                    // Якщо серіал, парсимо сезони та серії
                     var seasons = [];
                     if (html.find('.season-list').length) {
                         html.find('.season-list .season').each(function () {
@@ -82,7 +76,7 @@
                     }
 
                     var content = {
-                        streams: video_urls.length ? video_urls : [{ quality: 'HD', url: '' }], // Запасний варіант
+                        streams: video_urls.length ? video_urls : [{ quality: 'HD', url: '' }],
                         title: html.find('h1').text().trim() || 'Без назви',
                         seasons: seasons.length ? seasons : null
                     };
@@ -99,10 +93,10 @@
         }
     };
 
-    // Реєстрація компонента в Lampa
+    // Реєстрація компонента як 'online' (як у online_mod.js)
     try {
-        Lampa.Component.add('uakino', {
-            name: 'Uakino',
+        Lampa.Component.add('online', {
+            name: 'Uakino', // Назва, що відображається в Lampa
             search: function (query, callback) {
                 Uakino.search(query, callback);
             },
@@ -110,19 +104,19 @@
                 Uakino.parse(url, callback);
             }
         });
-        console.log('Uakino: Компонент зареєстровано');
+        console.log('Uakino: Компонент зареєстровано як "online"');
     } catch (e) {
         console.error('Uakino: Помилка реєстрації компонента:', e);
     }
 
-    // Додавання в налаштування Lampa
+    // Додавання в налаштування з унікальним ідентифікатором
     try {
-        Lampa.Settings.add('online', {
-            id: 'uakino',
+        Lampa.Settings.add('source', {
+            id: 'uakino_source', // Унікальний ID для вашого джерела
             name: 'Uakino',
             enabled: true
         });
-        console.log('Uakino: Додано в налаштування');
+        console.log('Uakino: Додано в налаштування як "Uakino"');
     } catch (e) {
         console.error('Uakino: Помилка додавання в налаштування:', e);
     }
