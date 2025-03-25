@@ -7,10 +7,6 @@
     var Uakino = {
         base_url: 'https://uakino.me',
 
-        init: function () {
-            console.log('Uakino: Ініціалізація');
-        },
-
         search: function (query, callback) {
             console.log('Uakino: Пошук:', query);
             var url = this.base_url + '/search?q=' + encodeURIComponent(query);
@@ -98,9 +94,20 @@
         }
     };
 
+    // Компонент
+    var component = {
+        name: 'Uakino',
+        search: function (query, callback) {
+            Uakino.search(query, callback);
+        },
+        parse: function (url, callback) {
+            Uakino.parse(url, callback);
+        }
+    };
+
     // Реєстрація компонента
     if (typeof Lampa !== 'undefined' && Lampa.Component && Lampa.Component.add) {
-        Lampa.Component.add('online', Uakino);
+        Lampa.Component.add('online', component);
         console.log('Uakino: Компонент зареєстровано як "online"');
     } else {
         console.error('Uakino: Lampa.Component.add недоступний');
