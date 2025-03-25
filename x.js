@@ -3,7 +3,7 @@
 
     // Конфігурація
     var Defined = {
-        baseUrl: 'https://uakino.me/'
+        baseUrl: 'https://uaserial.com/'
     };
 
     // Компонент плагіна
@@ -15,6 +15,7 @@
         var initialized = false;
         var last;
 
+        // Ініціалізація
         this.initialize = function () {
             if (initialized) return;
             initialized = true;
@@ -31,45 +32,42 @@
             files.appendFiles(scroll.render());
             files.appendHead(filter.render());
             scroll.minus(files.render().find('.explorer__files-head'));
-            scroll.body().append(Lampa.Template.get('uakino_content_loading'));
+            scroll.body().append(Lampa.Template.get('uaserial_content_loading'));
             Lampa.Controller.enable('content');
             this.loading(false);
             this.search();
         };
 
+        // Пошук
         this.search = function () {
             this.reset();
             var query = object.search || object.movie.title || object.movie.name;
-            var url = Defined.baseUrl + 'index.php?do=search&subaction=search&story=' + encodeURIComponent(query);
-            console.log('UAKino search URL:', url);
+            var url = Defined.baseUrl + 'search/' + encodeURIComponent(query);
             this.request(url);
         };
 
+        // Запит до сайту
         this.request = function (url) {
             network.native(
                 'https://cors-anywhere.herokuapp.com/' + url,
                 this.parse.bind(this),
-                function (error) {
-                    console.log('UAKino request error:', error);
-                    this.doesNotAnswer();
-                }.bind(this),
+                this.doesNotAnswer.bind(this),
                 false,
                 { dataType: 'text' }
             );
         };
 
+        // Парсинг результатів
         this.parse = function (response) {
-            console.log('UAKino response:', response.substring(0, 500)); // Обрізаємо для зручності
             try {
                 var parser = new DOMParser();
                 var doc = parser.parseFromString(response, 'text/html');
-                var items = doc.querySelectorAll('.movie-item.shortstory') || [];
+                var items = doc.querySelectorAll('.short') || [];
                 var videos = [];
 
                 items.forEach(function (item) {
-                    var titleEl = item.querySelector('.movie-item__title');
-                    var linkEl = item.querySelector('a[href*=".html"]');
-                    var imgEl = item.querySelector('.movie-item__poster img');
+                    var titleEl = item.querySelector('.short-title');
+                    var linkEl = item.querySelector('a.short-link');
 
                     var title = titleEl?.textContent.trim();
                     var link = linkEl?.href;
@@ -78,7 +76,7 @@
                         videos.push({
                             title: title,
                             url: link,
-                            poster: imgEl?.src || '',
+                            poster: '',
                             method: 'call',
                             text: title
                         });
@@ -88,22 +86,22 @@
                 if (videos.length) {
                     this.display(videos);
                 } else {
-                    console.log('UAKino: No videos found');
                     this.doesNotAnswer();
                 }
             } catch (e) {
-                console.error('UAKino parse error:', e);
+                console.error('UASerial parse error:', e);
                 this.doesNotAnswer();
             }
         };
 
+        // Отримання URL потоку
         this.getFileUrl = function (file, call) {
             network.native(
                 'https://cors-anywhere.herokuapp.com/' + file.url,
                 function (response) {
                     var parser = new DOMParser();
                     var doc = parser.parseFromString(response, 'text/html');
-                    var iframe = doc.querySelector('.fplayer iframe');
+                    var iframe = doc.querySelector('.player iframe');
                     var streamUrl = iframe?.src || '';
                     call({ url: streamUrl });
                 },
@@ -115,11 +113,12 @@
             );
         };
 
+        // Відображення результатів
         this.display = function (videos) {
             var _this = this;
             scroll.clear();
             videos.forEach(function (element) {
-                var html = Lampa.Template.get('uakino_prestige_full', {
+                var html = Lampa.Template.get('uaserial_prestige_full', {
                     title: element.title,
                     info: element.text,
                     time: '',
@@ -151,9 +150,10 @@
             this.loading(false);
         };
 
+        // Помилка
         this.doesNotAnswer = function () {
             scroll.clear();
-            var html = Lampa.Template.get('uakino_does_not_answer', {});
+            var html = Lampa.Template.get('uaserial_does_not_answer', {});
             html.find('.online-empty__title').text('Немає результатів');
             html.find('.online-empty__time').text('Спробуйте пізніше');
             html.find('.online-empty__buttons').remove();
@@ -161,12 +161,14 @@
             this.loading(false);
         };
 
+        // Очистка
         this.reset = function () {
             network.clear();
             scroll.clear();
-            scroll.body().append(Lampa.Template.get('uakino_content_loading'));
+            scroll.body().append(Lampa.Template.get('uaserial_content_loading'));
         };
 
+        // Завантаження
         this.loading = function (status) {
             if (status) this.activity.loader(true);
             else {
@@ -175,6 +177,7 @@
             }
         };
 
+        // Рендеринг
         this.create = function () {
             return files.render();
         };
@@ -227,9 +230,10 @@
 
     // Запуск плагіна
     function startPlugin() {
-        window.uakino_plugin = true;
+        window.uaserial_plugin = true;
 
-        Lampa.Template.add('uakino_content_loading', `
+        // Додавання шаблонів
+        Lampa.Template.add('uaserial_content_loading', `
             <div class="online-empty">
                 <div class="broadcast__scan"><div></div></div>
                 <div class="online-empty__templates">
@@ -249,7 +253,7 @@
             </div>
         `);
 
-        Lampa.Template.add('uakino_prestige_full', `
+        Lampa.Template.add('uaserial_prestige_full', `
             <div class="online-prestige online-prestige--full selector">
                 <div class="online-prestige__body">
                     <div class="online-prestige__head">
@@ -264,7 +268,7 @@
             </div>
         `);
 
-        Lampa.Template.add('uakino_does_not_answer', `
+        Lampa.Template.add('uaserial_does_not_answer', `
             <div class="online-empty">
                 <div class="online-empty__title"></div>
                 <div class="online-empty__time"></div>
@@ -272,18 +276,20 @@
             </div>
         `);
 
+        // Маніфест плагіна
         var manifest = {
             type: 'video',
             version: '1.0',
-            name: 'UAKino',
-            description: 'Плагін для перегляду контенту з uakino.me',
-            component: 'uakino'
+            name: 'UASerial',
+            description: 'Плагін для перегляду контенту з uaserial.com',
+            component: 'uaserial'
         };
 
-        Lampa.Component.add('uakino', component);
+        Lampa.Component.add('uaserial', component);
         Lampa.Manifest.plugins = manifest;
 
-        var button = '<div class="full-start__button selector view--onlinev" data-subtitle="UAKino v1.0">' +
+        // Кнопка
+        var button = '<div class="full-start__button selector view--onlinev" data-subtitle="UASerial v1.0">' +
             '<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">' +
             '<path d="M8 5v14l11-7z"/>' +
             '</svg><span>Online</span></div>';
@@ -292,11 +298,11 @@
             if (e.type === 'complite') {
                 var btn = $(button);
                 btn.on('hover:enter', function () {
-                    Lampa.Component.add('uakino', component);
+                    Lampa.Component.add('uaserial', component);
                     Lampa.Activity.push({
                         url: '',
-                        title: 'UAKino',
-                        component: 'uakino',
+                        title: 'UASerial',
+                        component: 'uaserial',
                         search: e.data.movie.title,
                         movie: e.data.movie,
                         page: 1
@@ -307,5 +313,5 @@
         });
     }
 
-    if (!window.uakino_plugin) startPlugin();
+    if (!window.uaserial_plugin) startPlugin();
 })();
