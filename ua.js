@@ -3,9 +3,8 @@
 
     console.log('Uakino: Початок завантаження плагіну');
 
-    // Основний об’єкт плагіну
     var Uakino = {
-        name: 'Uakino', // Назва, яка відобразиться в списку джерел
+        name: 'Uakino',
         base_url: 'https://uakino.me',
 
         search: function (query, callback) {
@@ -21,7 +20,7 @@
                         var link = titleElement.attr('href') || '';
                         if (link) {
                             var fullLink = link.startsWith('http') ? link : Uakino.base_url + link;
-                            var isSeries = title.includes('сезон') || title.includes('серія');
+                            var isSeries = title.toLowerCase().includes('сезон') || title.toLowerCase().includes('серія');
                             items.push({
                                 title: title,
                                 url: fullLink,
@@ -62,11 +61,11 @@
                     if (html.find('.season-list').length) {
                         html.find('.season-list .season').each(function () {
                             var season = {
-                                title: $(this).find('.season-title').text() || 'Сезон',
+                                title: $(this).find('.season-title').text().trim() || 'Сезон',
                                 episodes: []
                             };
                             $(this).find('.episode').each(function () {
-                                var epTitle = $(this).find('.episode-title').text() || 'Серія';
+                                var epTitle = $(this).find('.episode-title').text().trim() || 'Серія';
                                 var epUrl = $(this).find('a').attr('href') || url;
                                 season.episodes.push({
                                     title: epTitle,
@@ -95,7 +94,6 @@
         }
     };
 
-    // Реєстрація компонента
     if (typeof Lampa !== 'undefined' && Lampa.Component && Lampa.Component.add) {
         Lampa.Component.add('online', Uakino);
         console.log('Uakino: Компонент зареєстровано як "online"');
