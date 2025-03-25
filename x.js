@@ -12,6 +12,7 @@
         var scroll = new Lampa.Scroll({ mask: true, over: true });
         var files = new Lampa.Explorer(object);
         var filter = new Lampa.Filter(object);
+        var initialized = false;
 
         var last;
 
@@ -33,6 +34,7 @@
             Lampa.Controller.enable('content');
             this.loading(false);
             this.search();
+            initialized = true;
         };
 
         // Пошук
@@ -87,6 +89,7 @@
                     this.doesNotAnswer();
                 }
             } catch (e) {
+                console.error('UAKino parse error:', e);
                 this.doesNotAnswer();
             }
         };
@@ -180,8 +183,8 @@
         };
 
         this.start = function () {
-            if (!this.initialized) {
-                this.initialized = true;
+            if (Lampa.Activity.active().activity !== this.activity) return;
+            if (!initialized) {
                 this.initialize();
             }
             Lampa.Controller.add('content', {
@@ -190,16 +193,19 @@
                     Lampa.Controller.collectionFocus(last || false, scroll.render());
                 },
                 up: function () {
-                    Navigator.move('up');
+                    if (Navigator.canmove('up')) Navigator.move('up');
+                    else Lampa.Controller.toggle('head');
                 },
                 down: function () {
                     Navigator.move('down');
                 },
                 right: function () {
-                    filter.show('Фільтр', 'filter');
+                    if (Navigator.canmove('right')) Navigator.move('right');
+                    else filter.show('Фільтр', 'filter');
                 },
                 left: function () {
-                    Lampa.Controller.toggle('menu');
+                    if (Navigator.canmove('left')) Navigator.move('left');
+                    else Lampa.Controller.toggle('menu');
                 },
                 back: this.back.bind(this)
             });
