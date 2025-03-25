@@ -41,8 +41,8 @@
         // Пошук
         this.search = function () {
             this.reset();
-            var query = object.search || object.movie.title || object.movie.name;
-            var url = Defined.baseUrl + 'search/' + encodeURIComponent(query);
+            // Оскільки пошуку немає, беремо головну сторінку
+            var url = Defined.baseUrl;
             this.request(url);
         };
 
@@ -62,21 +62,23 @@
             try {
                 var parser = new DOMParser();
                 var doc = parser.parseFromString(response, 'text/html');
-                var items = doc.querySelectorAll('.short') || [];
+                var items = doc.querySelectorAll('.serial-item') || []; // Змінено на ймовірний селектор
                 var videos = [];
+                var query = (object.search || object.movie.title || object.movie.name).toLowerCase();
 
                 items.forEach(function (item) {
-                    var titleEl = item.querySelector('.short-title');
-                    var linkEl = item.querySelector('a.short-link');
+                    var titleEl = item.querySelector('.serial-title');
+                    var linkEl = item.querySelector('a[href*=".html"]');
+                    var imgEl = item.querySelector('img');
 
                     var title = titleEl?.textContent.trim();
                     var link = linkEl?.href;
 
-                    if (title && link) {
+                    if (title && link && title.toLowerCase().includes(query)) {
                         videos.push({
                             title: title,
                             url: link,
-                            poster: '',
+                            poster: imgEl?.src || '',
                             method: 'call',
                             text: title
                         });
@@ -101,7 +103,7 @@
                 function (response) {
                     var parser = new DOMParser();
                     var doc = parser.parseFromString(response, 'text/html');
-                    var iframe = doc.querySelector('.player iframe');
+                    var iframe = doc.querySelector('.player-container iframe') || doc.querySelector('iframe'); // Адаптуйте селектор
                     var streamUrl = iframe?.src || '';
                     call({ url: streamUrl });
                 },
