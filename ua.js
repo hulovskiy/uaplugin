@@ -2,44 +2,44 @@
     'use strict';
 
     var Online = {
-        name: 'Uakino', // Назва для відображення
-        url: 'https://uakino.me', // Базовий URL
+        name: 'Uakino',
+        url: 'https://uakino.me',
 
         search: function (query, cb) {
-            console.log('[Uakino] Пошук:', query);
-            var search_url = this.url + '/search?q=' + encodeURIComponent(query);
-            network.silent(search_url, function (str) {
-                var items = [];
+            console.log('[Uakino] Search started:', query);
+            var url = this.url + '/search?q=' + encodeURIComponent(query);
+            network.silent(url, function (str) {
+                var videos = [];
                 try {
                     var html = $('<div>').html(str);
                     html.find('.shortstory').each(function () {
-                        var titleElement = $(this).find('.shortstory-title a');
-                        var title = titleElement.text().trim() || 'Без назви';
-                        var link = titleElement.attr('href') || '';
+                        var a = $(this).find('.shortstory-title a');
+                        var title = a.text().trim() || 'No title';
+                        var link = a.attr('href') || '';
                         if (link) {
-                            var fullLink = link.indexOf('http') === 0 ? link : Online.url + link;
+                            var full_link = link.indexOf('http') === 0 ? link : Online.url + link;
                             var isSeries = title.includes('сезон') || title.includes('серія');
-                            items.push({
+                            videos.push({
                                 title: title,
-                                url: fullLink,
+                                url: full_link,
                                 type: isSeries ? 'series' : 'movie'
                             });
                         }
                     });
-                    console.log('[Uakino] Знайдено:', items.length);
-                    cb(items);
+                    console.log('[Uakino] Found:', videos.length);
+                    cb(videos);
                 } catch (e) {
-                    console.error('[Uakino] Помилка парсингу пошуку:', e);
+                    console.error('[Uakino] Search parse error:', e);
                     cb([]);
                 }
             }, function () {
-                console.error('[Uakino] Помилка запиту до', search_url);
+                console.error('[Uakino] Search request failed:', url);
                 cb([]);
             });
         },
 
         parse: function (url, cb) {
-            console.log('[Uakino] Парсинг:', url);
+            console.log('[Uakino] Parse started:', url);
             network.silent(url, function (str) {
                 try {
                     var html = $('<div>').html(str);
@@ -54,51 +54,30 @@
                             });
                         }
                     });
-
-                    var seasons = [];
-                    if (html.find('.season-list').length) {
-                        html.find('.season-list .season').each(function () {
-                            var season = {
-                                title: $(this).find('.season-title').text() || 'Сезон',
-                                episodes: []
-                            };
-                            $(this).find('.episode').each(function () {
-                                var epTitle = $(this).find('.episode-title').text() || 'Серія';
-                                var epUrl = $(this).find('a').attr('href') || url;
-                                season.episodes.push({
-                                    title: epTitle,
-                                    url: epUrl.indexOf('http') === 0 ? epUrl : Online.url + epUrl
-                                });
-                            });
-                            seasons.push(season);
-                        });
-                    }
-
                     var result = {
                         streams: videos.length ? videos : [{ quality: 'HD', url: '' }],
-                        title: html.find('h1').text().trim() || 'Без назви',
-                        seasons: seasons.length ? seasons : null
+                        title: html.find('h1').text().trim() || 'No title'
                     };
-                    console.log('[Uakino] Дані:', result);
+                    console.log('[Uakino] Parsed:', result);
                     cb(result);
                 } catch (e) {
-                    console.error('[Uakino] Помилка парсингу:', e);
+                    console.error('[Uakino] Parse error:', e);
                     cb(null);
                 }
             }, function () {
-                console.error('[Uakino] Помилка запиту до', url);
+                console.error('[Uakino] Parse request failed:', url);
                 cb(null);
             });
         }
     };
 
-    console.log('[Uakino] Реєстрація компонента');
+    console.log('[Uakino] Registering component');
     if (typeof Lampa !== 'undefined' && Lampa.Component && Lampa.Component.add) {
         Lampa.Component.add('online', Online);
-        console.log('[Uakino] Компонент зареєстровано як "online"');
+        console.log('[Uakino] Component registered as "online"');
     } else {
-        console.error('[Uakino] Помилка: Lampa.Component.add недоступний');
+        console.error('[Uakino] Error: Lampa.Component.add not available');
     }
 
-    console.log('[Uakino] Завантаження завершено');
+    console.log('[Uakino] Plugin loaded');
 })();
