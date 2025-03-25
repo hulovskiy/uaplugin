@@ -2,24 +2,19 @@
     'use strict';
 
     var Online = {
-        name: 'UakinoTest', // Проста назва для тесту
-        search: function (query, cb) {
-            console.log('[UakinoTest] Search:', query);
-            cb([{ title: 'Тестовий фільм', url: 'https://uakino.me/test', type: 'movie' }]);
+        name: 'Uakino',
+        search: function(query, cb) {
+            cb([]);
         },
-        parse: function (url, cb) {
-            console.log('[UakinoTest] Parse:', url);
-            cb({ streams: [{ quality: 'HD', url: 'https://uakino.me/test.mp4' }], title: 'Тестовий фільм' });
+        parse: function(url, cb) {
+            cb(null);
         }
     };
 
-    console.log('[UakinoTest] Registering component');
     if (typeof Lampa !== 'undefined' && Lampa.Component && Lampa.Component.add) {
         Lampa.Component.add('online', Online);
-        console.log('[UakinoTest] Component registered as "online"');
+        console.log('[Uakino] Component registered');
     } else {
-        console.error('[UakinoTest] Error: Lampa.Component.add not available');
+        console.error('[Uakino] Lampa.Component.add not available');
     }
-
-    console.log('[UakinoTest] Plugin loaded');
 })();
