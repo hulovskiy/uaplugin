@@ -15,9 +15,8 @@
         var initialized = false;
         var last;
 
-        // Ініціалізація
         this.initialize = function () {
-            if (initialized) return; // Запобігаємо повторній ініціалізації
+            if (initialized) return;
             initialized = true;
 
             this.loading(true);
@@ -27,7 +26,7 @@
                     clarification: true
                 });
             };
-            filter.onBack = this.back.bind(this); // Змінено на back для уникнення рекурсії
+            filter.onBack = this.back.bind(this);
             scroll.body().addClass('torrent-list');
             files.appendFiles(scroll.render());
             files.appendHead(filter.render());
@@ -35,30 +34,32 @@
             scroll.body().append(Lampa.Template.get('uakino_content_loading'));
             Lampa.Controller.enable('content');
             this.loading(false);
-            this.search(); // Пошук запускається один раз
+            this.search();
         };
 
-        // Пошук
         this.search = function () {
             this.reset();
             var query = object.search || object.movie.title || object.movie.name;
             var url = Defined.baseUrl + 'index.php?do=search&subaction=search&story=' + encodeURIComponent(query);
+            console.log('UAKino search URL:', url);
             this.request(url);
         };
 
-        // Запит до сайту
         this.request = function (url) {
             network.native(
                 'https://cors-anywhere.herokuapp.com/' + url,
                 this.parse.bind(this),
-                this.doesNotAnswer.bind(this),
+                function (error) {
+                    console.log('UAKino request error:', error);
+                    this.doesNotAnswer();
+                }.bind(this),
                 false,
                 { dataType: 'text' }
             );
         };
 
-        // Парсинг результатів
         this.parse = function (response) {
+            console.log('UAKino response:', response.substring(0, 500)); // Обрізаємо для зручності
             try {
                 var parser = new DOMParser();
                 var doc = parser.parseFromString(response, 'text/html');
@@ -87,6 +88,7 @@
                 if (videos.length) {
                     this.display(videos);
                 } else {
+                    console.log('UAKino: No videos found');
                     this.doesNotAnswer();
                 }
             } catch (e) {
@@ -95,7 +97,6 @@
             }
         };
 
-        // Отримання URL потоку
         this.getFileUrl = function (file, call) {
             network.native(
                 'https://cors-anywhere.herokuapp.com/' + file.url,
@@ -114,7 +115,6 @@
             );
         };
 
-        // Відображення результатів
         this.display = function (videos) {
             var _this = this;
             scroll.clear();
@@ -151,7 +151,6 @@
             this.loading(false);
         };
 
-        // Помилка
         this.doesNotAnswer = function () {
             scroll.clear();
             var html = Lampa.Template.get('uakino_does_not_answer', {});
@@ -162,14 +161,12 @@
             this.loading(false);
         };
 
-        // Очистка
         this.reset = function () {
             network.clear();
             scroll.clear();
             scroll.body().append(Lampa.Template.get('uakino_content_loading'));
         };
 
-        // Завантаження
         this.loading = function (status) {
             if (status) this.activity.loader(true);
             else {
@@ -178,7 +175,6 @@
             }
         };
 
-        // Рендеринг
         this.create = function () {
             return files.render();
         };
@@ -233,7 +229,6 @@
     function startPlugin() {
         window.uakino_plugin = true;
 
-        // Додавання шаблонів
         Lampa.Template.add('uakino_content_loading', `
             <div class="online-empty">
                 <div class="broadcast__scan"><div></div></div>
@@ -277,7 +272,6 @@
             </div>
         `);
 
-        // Маніфест плагіна
         var manifest = {
             type: 'video',
             version: '1.0',
@@ -289,7 +283,6 @@
         Lampa.Component.add('uakino', component);
         Lampa.Manifest.plugins = manifest;
 
-        // Кнопка
         var button = '<div class="full-start__button selector view--onlinev" data-subtitle="UAKino v1.0">' +
             '<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">' +
             '<path d="M8 5v14l11-7z"/>' +
