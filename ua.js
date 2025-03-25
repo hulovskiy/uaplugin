@@ -1,7 +1,6 @@
 (function () {
     'use strict';
 
-    // Перевірка наявності Lampa
     if (!window.Lampa) {
         console.error('[UAKino] Lampa framework not found');
         return;
@@ -10,25 +9,21 @@
     var uakino = {
         id: 'uakino',
         name: 'UAKino',
-        version: '1.0.1',
+        version: '1.0.2',
         baseUrl: 'https://uakino.me',
 
-        // Пошук контенту
         search: function (query, callback) {
             var url = this.baseUrl + '/search?query=' + encodeURIComponent(query);
             console.log('[UAKino] Searching:', url);
             
             this.fetch(url, function (response) {
-                if (!response) {
-                    console.error('[UAKino] No response from search');
-                    return callback([]);
-                }
-
+                if (!response) return callback([]);
+                
                 var results = [];
                 try {
                     var parser = new DOMParser();
                     var doc = parser.parseFromString(response, 'text/html');
-                    var items = doc.querySelectorAll('.shortstory') || []; // Оновлений селектор
+                    var items = doc.querySelectorAll('.shortstory') || [];
 
                     items.forEach(function (item) {
                         try {
@@ -52,11 +47,9 @@
                                 });
                             }
                         } catch (e) {
-                            console.error('[UAKino] Item parse error:', e);
+                            console.error('[UAKino] Search item error:', e);
                         }
                     });
-
-                    console.log('[UAKino] Found results:', results.length);
                     callback(results);
                 } catch (e) {
                     console.error('[UAKino] Search parsing error:', e);
@@ -65,7 +58,6 @@
             });
         },
 
-        // Отримання деталей контенту
         detail: function (id, callback) {
             var url = this.baseUrl + '/' + id + '.html';
             console.log('[UAKino] Getting details:', url);
@@ -101,17 +93,60 @@
                         detail.actors.push(actor.textContent.trim());
                     });
 
-                    // Потоки
-                    var playerFrame = doc.querySelector('iframe[src]');
-                    if (playerFrame) {
-                        detail.streams.push({
-                            url: playerFrame.src,
+                    // Парсинг потоків
+                    var streams = [];
+                    
+                    // Спроба знайти iframe
+                    var iframe = doc.querySelector('.fplayer iframe');
+                    if (iframe && iframe.src) {
+                        streams.push({
+                            url: iframe.src,
                             quality: 'HD',
                             title: 'UAKino HD'
                         });
                     }
 
-                    console.log('[UAKino] Detail loaded:', detail.title);
+                    // Спроба знайти прямий потік
+                    var video = doc.querySelector('video source');
+                    if (video && video.src) {
+                        streams.push({
+                            url: video.src,
+                            quality: 'HD',
+                            title: 'UAKino Direct'
+                        });
+                    }
+
+                    // Пошук у скриптах (деякі плеєри ховають URL у JS)
+                    var scripts = doc.querySelectorAll('script');
+                    scripts.forEach(function (script) {
+                        var content = script.textContent;
+                        if (content.includes('.mp4') || content.includes('.m3u8')) {
+                            var matches = content.match(/(https?:\/\/[^\s]+\.(mp4|m3u8))/);
+                            if (matches && matches[1]) {
+                                streams.push({
+                                    url: matches[1],
+                                    quality: 'HD',
+                                    title: 'UAKino Stream'
+                                });
+                            }
+                        }
+                    });
+
+                    detail.streams = streams;
+                    console.log('[UAKino] Found streams:', streams.length);
+
+                    // Якщо немає потоків, додати трейлер як запасний варіант
+                    if (!streams.length) {
+                        var trailer = doc.querySelector('a[href*="youtube.com"]');
+                        if (trailer) {
+                            detail.streams.push({
+                                url: trailer.href,
+                                quality: 'Trailer',
+                                title: 'YouTube Trailer'
+                            });
+                        }
+                    }
+
                     callback(detail);
                 } catch (e) {
                     console.error('[UAKino] Detail parsing error:', e);
@@ -120,44 +155,42 @@
             });
         },
 
-        // Сезони для серіалів
         seasons: function (id, callback) {
             var url = this.baseUrl + '/' + id + '.html';
             console.log('[UAKino] Getting seasons:', url);
 
             this.fetch(url, function (response) {
-                if (!response) {
-                    console.error('[UAKino] No response from seasons');
-                    return callback([]);
-                }
+                if (!response) return callback([]);
 
                 try {
                     var parser = new DOMParser();
                     var doc = parser.parseFromString(response, 'text/html');
                     var seasons = [];
                     
-                    var seasonTabs = doc.querySelectorAll('.season-tabs .tab');
-                    if (seasonTabs.length) {
-                        seasonTabs.forEach(function (season, index) {
-                            var episodes = [];
-                            var epList = doc.querySelectorAll(`.episode-list[data-season="${index + 1}"] .episode`);
+                    var seasonTabs = doc.querySelectorAll('.tabs-box .tab');
+                    seasonTabs.forEach(function (season, index) {
+                        var episodes = [];
+                        var epList = doc.querySelectorAll(`.tabs-content[data-tab="${index + 1}"] .episode`);
+                        
+                        epList.forEach(function (ep) {
+                            var epLink = ep.querySelector('a')?.href;
+                            var streamUrl = ep.dataset?.url || epLink;
                             
-                            epList.forEach(function (ep) {
-                                var epUrl = ep.querySelector('a')?.href;
-                                episodes.push({
-                                    id: ep.dataset.id || epUrl?.split('/').pop(),
-                                    number: ep.querySelector('.ep-number')?.textContent.trim() || '',
-                                    title: ep.querySelector('.ep-title')?.textContent.trim() || '',
-                                    stream: epUrl || ''
-                                });
+                            episodes.push({
+                                id: ep.dataset?.id || (epLink ? epLink.split('/').pop() : index),
+                                number: ep.querySelector('.num')?.textContent.trim() || '',
+                                title: ep.querySelector('.title')?.textContent.trim() || '',
+                                stream: streamUrl || ''
                             });
+                        });
 
+                        if (episodes.length) {
                             seasons.push({
                                 season: (index + 1).toString(),
                                 episodes: episodes
                             });
-                        });
-                    }
+                        }
+                    });
 
                     console.log('[UAKino] Seasons found:', seasons.length);
                     callback(seasons);
@@ -168,33 +201,25 @@
             });
         },
 
-        // Fetch з проксі
         fetch: function (url, callback) {
-            console.log('[UAKino] Fetching:', url);
-            
-            // Використання проксі для обходу CORS
             var proxyUrl = 'https://cors-anywhere.herokuapp.com/' + url;
-            
             fetch(proxyUrl, {
                 headers: {
                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
                     'Origin': window.location.origin
                 }
             })
-            .then(function (response) {
+            .then(response => {
                 if (!response.ok) throw new Error('Network response was not ok');
                 return response.text();
             })
-            .then(function (data) {
-                callback(data);
-            })
-            .catch(function (error) {
+            .then(callback)
+            .catch(error => {
                 console.error('[UAKino] Fetch error:', error);
                 callback(null);
             });
         },
 
-        // Ініціалізація
         init: function () {
             try {
                 window.Lampa.Storage.set('online_active', this.id);
@@ -206,7 +231,6 @@
         }
     };
 
-    // Запуск плагіна
     function initializePlugin() {
         if (document.readyState === 'complete' || document.readyState === 'interactive') {
             uakino.init();
