@@ -7,6 +7,10 @@
     var Uakino = {
         base_url: 'https://uakino.me',
 
+        init: function () {
+            console.log('Uakino: Ініціалізація');
+        },
+
         search: function (query, callback) {
             console.log('Uakino: Пошук:', query);
             var url = this.base_url + '/search?q=' + encodeURIComponent(query);
@@ -94,23 +98,24 @@
         }
     };
 
-    // Компонент
-    var component = {
-        name: 'Uakino',
-        search: function (query, callback) {
-            Uakino.search(query, callback);
-        },
-        parse: function (url, callback) {
-            Uakino.parse(url, callback);
-        }
-    };
-
-    // Реєстрація компонента
+    // Реєстрація компонента як у online_mod.js
     if (typeof Lampa !== 'undefined' && Lampa.Component && Lampa.Component.add) {
-        Lampa.Component.add('online', component);
+        Lampa.Component.add('online', Uakino);
         console.log('Uakino: Компонент зареєстровано як "online"');
     } else {
         console.error('Uakino: Lampa.Component.add недоступний');
+    }
+
+    // Додавання в налаштування як у online_mod.js
+    if (typeof Lampa !== 'undefined' && Lampa.Settings && Lampa.Settings.add) {
+        Lampa.Settings.add('online', {
+            id: 'uakino',
+            name: 'Uakino',
+            enabled: true
+        });
+        console.log('Uakino: Додано в налаштування');
+    } else {
+        console.error('Uakino: Lampa.Settings.add недоступний');
     }
 
     console.log('Uakino: Завантаження завершено');
