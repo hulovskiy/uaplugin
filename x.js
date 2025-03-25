@@ -29,7 +29,7 @@
             files.appendFiles(scroll.render());
             files.appendHead(filter.render());
             scroll.minus(files.render().find('.explorer__files-head'));
-            scroll.body().append(Lampa.Template.get('lampac_content_loading'));
+            scroll.body().append(Lampa.Template.get('uakino_content_loading'));
             Lampa.Controller.enable('content');
             this.loading(false);
             this.search();
@@ -91,7 +91,7 @@
             }
         };
 
-        // Відтворення
+        // Отримання URL потоку
         this.getFileUrl = function (file, call) {
             network.native(
                 'https://cors-anywhere.herokuapp.com/' + file.url,
@@ -115,7 +115,7 @@
             var _this = this;
             scroll.clear();
             videos.forEach(function (element) {
-                var html = Lampa.Template.get('lampac_prestige_full', {
+                var html = Lampa.Template.get('uakino_prestige_full', {
                     title: element.title,
                     info: element.text,
                     time: '',
@@ -150,7 +150,7 @@
         // Помилка
         this.doesNotAnswer = function () {
             scroll.clear();
-            var html = Lampa.Template.get('lampac_does_not_answer', {});
+            var html = Lampa.Template.get('uakino_does_not_answer', {});
             html.find('.online-empty__title').text('Немає результатів');
             html.find('.online-empty__time').text('Спробуйте пізніше');
             html.find('.online-empty__buttons').remove();
@@ -162,7 +162,7 @@
         this.reset = function () {
             network.clear();
             scroll.clear();
-            scroll.body().append(Lampa.Template.get('lampac_content_loading'));
+            scroll.body().append(Lampa.Template.get('uakino_content_loading'));
         };
 
         // Завантаження
@@ -224,6 +224,52 @@
     // Запуск плагіна
     function startPlugin() {
         window.uakino_plugin = true;
+
+        // Додавання шаблонів
+        Lampa.Template.add('uakino_content_loading', `
+            <div class="online-empty">
+                <div class="broadcast__scan"><div></div></div>
+                <div class="online-empty__templates">
+                    <div class="online-empty-template">
+                        <div class="online-empty-template__ico"></div>
+                        <div class="online-empty-template__body"></div>
+                    </div>
+                    <div class="online-empty-template">
+                        <div class="online-empty-template__ico"></div>
+                        <div class="online-empty-template__body"></div>
+                    </div>
+                    <div class="online-empty-template">
+                        <div class="online-empty-template__ico"></div>
+                        <div class="online-empty-template__body"></div>
+                    </div>
+                </div>
+            </div>
+        `);
+
+        Lampa.Template.add('uakino_prestige_full', `
+            <div class="online-prestige online-prestige--full selector">
+                <div class="online-prestige__body">
+                    <div class="online-prestige__head">
+                        <div class="online-prestige__title">{title}</div>
+                        <div class="online-prestige__time">{time}</div>
+                    </div>
+                    <div class="online-prestige__footer">
+                        <div class="online-prestige__info">{info}</div>
+                        <div class="online-prestige__quality">{quality}</div>
+                    </div>
+                </div>
+            </div>
+        `);
+
+        Lampa.Template.add('uakino_does_not_answer', `
+            <div class="online-empty">
+                <div class="online-empty__title"></div>
+                <div class="online-empty__time"></div>
+                <div class="online-empty__buttons"></div>
+            </div>
+        `);
+
+        // Маніфест плагіна
         var manifest = {
             type: 'video',
             version: '1.0',
@@ -235,6 +281,7 @@
         Lampa.Component.add('uakino', component);
         Lampa.Manifest.plugins = manifest;
 
+        // Кнопка
         var button = '<div class="full-start__button selector view--onlinev" data-subtitle="UAKino v1.0">' +
             '<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">' +
             '<path d="M8 5v14l11-7z"/>' +
