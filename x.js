@@ -2,143 +2,190 @@
     'use strict';
 
     var Defined = {
-        api: 'uakino',
-        localhost: 'https://rc.bwa.to/',
-        sources: {
-            'uakino': { name: 'UAKino', url: 'https://uakino.me/', search: '?do=search&subaction=search&story=' },
-            'ashdi': { name: 'Ashdi', url: 'https://ashdi.vip/', search: 'vod/search/?wd=' },
-            'kinoukr': { name: 'KinoUkr', url: 'https://kinoukr.me/', search: 'search/?q=' },
-            'filmix': { name: 'Filmix', url: 'https://filmix.ac/', search: 'search/?s=' }
-        }
+        baseUrl: 'https://4kino.cc/',
+        searchPath: '?do=search&subaction=search&story='
     };
 
-    var unic_id = Lampa.Storage.get('uakino_unic_id', '');
-    if (!unic_id) {
-        unic_id = Lampa.Utils.uid(8).toLowerCase();
-        Lampa.Storage.set('uakino_unic_id', unic_id);
-    }
-
-    function Network() {
-        this.net = new Lampa.Reguest();
-        this.timeout = function(time) { this.net.timeout(time); };
-        this.silent = function(url, success, error) {
-            this.net.silent(url, success, error, false, {
-                headers: { 'Origin': Defined.localhost, 'X-Requested-With': 'XMLHttpRequest' }
-            });
-        };
-        this.native = function(url, success, error) {
-            this.net.native(url, success, error, false, {
-                headers: { 'Origin': Defined.localhost, 'X-Requested-With': 'XMLHttpRequest' },
-                dataType: 'text'
-            });
-        };
-        this.clear = function() { this.net.clear(); };
-    }
-
     function component(object) {
-        var network = new Network();
+        var network = new Lampa.Reguest();
         var scroll = new Lampa.Scroll({ mask: true, over: true });
         var files = new Lampa.Explorer(object);
         var filter = new Lampa.Filter(object);
-        var sources = Defined.sources;
-        var filter_sources = Object.keys(sources);
-        var balanser = Lampa.Storage.get('online_balanser', filter_sources[0]);
+        var initialized = false;
         var last;
 
-        function account(url) {
-            return Lampa.Utils.addUrlComponent(url, 'uid=' + encodeURIComponent(unic_id));
-        }
-
-        this.requestParams = function() {
-            var query = [];
-            var title = object.movie.title || object.movie.name;
-            query.push('query=' + encodeURIComponent(title));
-            query.push('year=' + ((object.movie.release_date || object.movie.first_air_date || '0000') + '').slice(0, 4));
-            query.push('type=' + (object.movie.name ? 'series' : 'movie'));
-            if (object.movie.imdb_id) query.push('imdb=' + object.movie.imdb_id);
-            if (object.movie.kinopoisk_id) query.push('kp=' + object.movie.kinopoisk_id);
-            return Defined.localhost + 'search?' + query.join('&');
-        };
-
-        this.initialize = function() {
+        this.initialize = function () {
+            if (initialized) return;
+            initialized = true;
+            console.log('Initializing 4Kino plugin');
+            this.loading(true);
+            filter.onSearch = (value) => Lampa.Activity.replace({ search: value, clarification: true });
+            filter.onBack = this.back.bind(this);
             scroll.body().addClass('torrent-list');
             files.appendFiles(scroll.render());
             files.appendHead(filter.render());
-            scroll.body().append(Lampa.Template.get('lampac_content_loading'));
+            scroll.minus(files.render().find('.explorer__files-head'));
+            scroll.body().append(Lampa.Template.get('kino_content_loading'));
             Lampa.Controller.enable('content');
+            this.loading(false);
             this.search();
         };
 
-        this.search = function() {
-            var url = this.requestParams();
-            network.timeout(10000);
-            network.silent(account(url), this.parse.bind(this), this.doesNotAnswer.bind(this));
+        this.search = function () {
+            this.reset();
+            var query = object.search || object.movie.title || object.movie.name;
+            console.log('Search query:', query);
+            var url = Defined.baseUrl + Defined.searchPath + encodeURIComponent(query);
+            this.request(url);
         };
 
-        this.parse = function(data) {
-            try {
-                var json = Lampa.Arrays.decodeJson(data, {});
-                if (!json || !json.results) {
-                    this.doesNotAnswer('No valid data');
-                    return;
+        this.request = function (url) {
+            console.log('Requesting:', url);
+            network.native(
+                url,
+                (response) => {
+                    console.log('Response received:', response.substring(0, 200));
+                    this.parse(response);
+                },
+                (error) => {
+                    console.log('Request failed:', error);
+                    this.doesNotAnswer();
+                },
+                false,
+                {
+                    dataType: 'text',
+                    headers: {
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8'
+                    }
                 }
+            );
+        };
 
-                var videos = json.results.filter(function(v) {
-                    return v.url && v.source && filter_sources.includes(v.source);
+        this.parse = function (response) {
+            try {
+                var parser = new DOMParser();
+                var doc = parser.parseFromString(response, 'text/html');
+                var items = doc.querySelectorAll('.item.item-poster.grid-item');
+                console.log('Found items:', items.length);
+
+                var videos = [];
+                items.forEach(function (item) {
+                    var titleEl = item.querySelector('.item-poster__title');
+                    var linkEl = item;
+                    var imgEl = item.querySelector('.item-poster__img img');
+                    var metaEl = item.querySelector('.item-poster__meta');
+
+                    var title = titleEl?.textContent.trim();
+                    var link = linkEl?.href;
+                    var poster = imgEl?.src || '';
+                    var meta = metaEl?.textContent.trim() || '';
+
+                    if (title && link) {
+                        videos.push({
+                            title: title,
+                            url: link,
+                            poster: poster,
+                            method: 'call',
+                            text: `${title} (${meta})`
+                        });
+                        console.log('Added video:', title, link);
+                    }
                 });
 
                 if (videos.length) {
                     this.display(videos);
                 } else {
-                    this.empty();
+                    console.log('No videos found');
+                    this.doesNotAnswer();
                 }
             } catch (e) {
-                console.log('UAKinoMe', 'Parse error:', e);
-                this.doesNotAnswer(e);
+                console.error('Parse error:', e);
+                this.doesNotAnswer();
             }
         };
 
-        this.display = function(videos) {
+        this.getFileUrl = function (file, call) {
+            console.log('Fetching stream for:', file.url);
+            network.native(
+                file.url,
+                (response) => {
+                    var parser = new DOMParser();
+                    var doc = parser.parseFromString(response, 'text/html');
+                    var iframe = doc.querySelector('.full__video iframe');
+                    var streamUrl = iframe?.src || '';
+                    console.log('Stream URL:', streamUrl);
+                    if (streamUrl) {
+                        call({ url: streamUrl });
+                    } else {
+                        console.log('No valid stream URL found');
+                        call({ url: '' });
+                    }
+                },
+                (error) => {
+                    console.log('Stream fetch failed:', error);
+                    call({ url: '' });
+                },
+                false,
+                {
+                    dataType: 'text',
+                    headers: {
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8'
+                    }
+                }
+            );
+        };
+
+        this.display = function (videos) {
+            console.log('Displaying videos:', videos.length);
+            var _this = this;
             scroll.clear();
-            videos.forEach(function(video) {
-                var html = Lampa.Template.get('lampac_prestige_full', {
-                    title: video.title || object.movie.title,
-                    info: sources[video.source]?.name || video.source,
-                    time: video.quality ? video.quality + 'p' : '',
-                    quality: 'HD'
+            videos.forEach(function (element) {
+                var html = Lampa.Template.get('kino_prestige_full', {
+                    title: element.title,
+                    info: element.text,
+                    time: '',
+                    quality: '4K'
                 });
-                html.on('hover:enter', function() {
-                    Lampa.Player.play({ url: video.url, title: video.title });
-                    Lampa.Player.playlist([{ url: video.url, title: video.title }]);
-                });
-                html.on('hover:focus', function(e) {
+                html.on('hover:enter', () => {
+                    _this.getFileUrl(element, (stream) => {
+                        if (stream.url) {
+                            var play = { title: element.title, url: stream.url, quality: '4K' };
+                            Lampa.Player.play(play);
+                            Lampa.Player.playlist([play]);
+                        } else {
+                            Lampa.Noty.show('Не вдалося отримати посилання');
+                        }
+                    });
+                }).on('hover:focus', (e) => {
                     last = e.target;
                     scroll.update($(e.target), true);
                 });
                 scroll.append(html);
             });
-            this.loading(false);
             Lampa.Controller.enable('content');
+            this.loading(false);
         };
 
-        this.empty = function() {
+        this.doesNotAnswer = function () {
+            console.log('No results to display');
             scroll.clear();
-            var html = Lampa.Template.get('lampac_does_not_answer', {});
-            html.find('.online-empty__title').text('Немає доступного контенту');
+            var html = Lampa.Template.get('kino_does_not_answer', {});
+            html.find('.online-empty__title').text('Немає результатів');
+            html.find('.online-empty__time').text('Спробуйте пізніше');
+            html.find('.online-empty__buttons').remove();
             scroll.append(html);
             this.loading(false);
         };
 
-        this.doesNotAnswer = function(error) {
+        this.reset = function () {
+            network.clear();
             scroll.clear();
-            var html = Lampa.Template.get('lampac_does_not_answer', {});
-            html.find('.online-empty__title').text('Помилка сервера');
-            html.find('.online-empty__time').text(typeof error === 'string' ? error : '404 Not Found');
-            scroll.append(html);
-            this.loading(false);
+            scroll.body().append(Lampa.Template.get('kino_content_loading'));
         };
 
-        this.loading = function(status) {
+        this.loading = function (status) {
             if (status) this.activity.loader(true);
             else {
                 this.activity.loader(false);
@@ -146,24 +193,27 @@
             }
         };
 
-        this.start = function() {
-            if (!this.initialize) this.initialize();
+        this.create = function () { return files.render(); };
+        this.start = function () {
+            if (Lampa.Activity.active().activity !== this.activity) return;
+            if (!initialized) this.initialize();
+            Lampa.Background.immediately(Lampa.Utils.cardImgBackgroundBlur(object.movie));
             Lampa.Controller.add('content', {
-                toggle: function() {
+                toggle: () => {
                     Lampa.Controller.collectionSet(scroll.render(), files.render());
                     Lampa.Controller.collectionFocus(last || false, scroll.render());
                 },
-                up: function() { Navigator.move('up') || Lampa.Controller.toggle('head'); },
-                down: function() { Navigator.move('down'); },
-                right: function() { Navigator.move('right') || filter.show('Фільтр', 'filter'); },
-                left: function() { Navigator.move('left') || Lampa.Controller.toggle('menu'); },
-                back: function() { Lampa.Activity.backward(); }
+                up: () => Navigator.canmove('up') ? Navigator.move('up') : Lampa.Controller.toggle('head'),
+                down: () => Navigator.move('down'),
+                right: () => Navigator.canmove('right') ? Navigator.move('right') : filter.show('Фільтр', 'filter'),
+                left: () => Navigator.canmove('left') ? Navigator.move('left') : Lampa.Controller.toggle('menu'),
+                back: this.back.bind(this)
             });
             Lampa.Controller.toggle('content');
         };
-
-        this.render = function() { return files.render(); };
-        this.destroy = function() {
+        this.back = function () { Lampa.Activity.backward(); };
+        this.render = function () { return files.render(); };
+        this.destroy = function () {
             network.clear();
             files.destroy();
             scroll.destroy();
@@ -171,24 +221,20 @@
     }
 
     function startPlugin() {
-        window.uakino_plugin = true;
-        var manifest = {
-            type: 'video',
-            version: '1.2',
-            name: 'UAKinoMe',
-            description: 'Український контент з uakino.me, ashdi.vip, kinoukr.me, filmix.ac'
-        };
+        window.kino_plugin = true;
 
-        Lampa.Component.add('uakino', component);
-        Lampa.Manifest.plugins = manifest;
-
-        Lampa.Template.add('lampac_content_loading', `
+        Lampa.Template.add('kino_content_loading', `
             <div class="online-empty">
                 <div class="broadcast__scan"><div></div></div>
+                <div class="online-empty__templates">
+                    <div class="online-empty-template"><div class="online-empty-template__ico"></div><div class="online-empty-template__body"></div></div>
+                    <div class="online-empty-template"><div class="online-empty-template__ico"></div><div class="online-empty-template__body"></div></div>
+                    <div class="online-empty-template"><div class="online-empty-template__ico"></div><div class="online-empty-template__body"></div></div>
+                </div>
             </div>
         `);
 
-        Lampa.Template.add('lampac_prestige_full', `
+        Lampa.Template.add('kino_prestige_full', `
             <div class="online-prestige online-prestige--full selector">
                 <div class="online-prestige__body">
                     <div class="online-prestige__head">
@@ -203,35 +249,48 @@
             </div>
         `);
 
-        Lampa.Template.add('lampac_does_not_answer', `
+        Lampa.Template.add('kino_does_not_answer', `
             <div class="online-empty">
                 <div class="online-empty__title"></div>
                 <div class="online-empty__time"></div>
+                <div class="online-empty__buttons"></div>
             </div>
         `);
 
-        var button = '<div class="full-start__button selector view--online" data-subtitle="UAKinoMe v1.2">' +
-            '<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>' +
-            '<span>Онлайн</span></div>';
+        var manifest = {
+            type: 'video',
+            version: '1.0',
+            name: '4Kino',
+            description: 'Плагін для перегляду контенту з 4kino.cc у 4K якості',
+            component: 'kino'
+        };
 
-        Lampa.Listener.follow('full', function(e) {
+        Lampa.Component.add('kino', component);
+        Lampa.Manifest.plugins = manifest;
+
+        var button = '<div class="full-start__button selector view--onlinev" data-subtitle="4Kino v1.0">' +
+            '<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">' +
+            '<path d="M8 5v14l11-7z"/>' +
+            '</svg><span>Online</span></div>';
+
+        Lampa.Listener.follow('full', (e) => {
             if (e.type === 'complite') {
                 var btn = $(button);
-                btn.on('hover:enter', function() {
-                    Lampa.Component.add('uakino', component);
+                btn.on('hover:enter', () => {
+                    Lampa.Component.add('kino', component);
                     Lampa.Activity.push({
                         url: '',
-                        title: 'UAKinoMe',
-                        component: 'uakino',
+                        title: '4Kino',
+                        component: 'kino',
                         search: e.data.movie.title,
                         movie: e.data.movie,
                         page: 1
                     });
                 });
-                e.object.activity.render().find('.view--torrent').after(btn);
+                e.object.activity.render().find('.view--torrent').before(btn);
             }
         });
     }
 
-    if (!window.uakino_plugin) startPlugin();
+    if (!window.kino_plugin) startPlugin();
 })();
