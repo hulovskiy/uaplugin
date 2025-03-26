@@ -4,10 +4,12 @@
     var Defined = {
         baseUrl: 'https://uakino.me/',
         sources: {
+            uakino: 'https://uakino.me/',
             ashdi: 'https://ashdi.vip/',
             kinoukr: 'https://kinoukr.me/',
             filmix: 'https://filmix.ac/'
-        }
+        },
+        proxy: 'https://cors-anywhere.herokuapp.com/' // Додано проксі для обходу CORS
     };
 
     function component(object) {
@@ -44,25 +46,31 @@
 
         this.requestFromSources = function (query) {
             var _this = this;
-            var sources = Object.values(Defined.sources);
+            var sources = Object.keys(Defined.sources);
             var results = [];
+            var completed = 0;
 
-            sources.forEach(function (sourceUrl, index) {
-                var url = sourceUrl + (sourceUrl.includes('uakino') ? '?do=search&subaction=search&story=' : 'search?q=') + encodeURIComponent(query);
-                console.log('Requesting from:', sourceUrl);
+            sources.forEach(function (sourceKey) {
+                var sourceUrl = Defined.sources[sourceKey];
+                var searchPath = sourceKey === 'uakino' ? '?do=search&subaction=search&story=' : 'search?q=';
+                var url = Defined.proxy + sourceUrl + searchPath + encodeURIComponent(query);
+                console.log('Requesting from:', sourceUrl, 'via proxy:', url);
+
                 network.native(
                     url,
                     (response) => {
                         console.log('Response from ' + sourceUrl + ':', response.substring(0, 200));
                         var parsed = _this.parse(response, sourceUrl);
                         results = results.concat(parsed);
-                        if (index === sources.length - 1) {
+                        completed++;
+                        if (completed === sources.length) {
                             _this.processResults(results);
                         }
                     },
                     (error) => {
                         console.log('Request failed for ' + sourceUrl + ':', error);
-                        if (index === sources.length - 1) {
+                        completed++;
+                        if (completed === sources.length) {
                             _this.processResults(results);
                         }
                     },
@@ -82,22 +90,24 @@
             try {
                 var parser = new DOMParser();
                 var doc = parser.parseFromString(response, 'text/html');
-                var items = doc.querySelectorAll('.shortstory, .video-item, .film-item'); // Адаптивний селектор для різних джерел
+                var items = doc.querySelectorAll('.shortstory, .video-item, .film-item, .movie-item') || [];
                 console.log('Found items from ' + sourceUrl + ':', items.length);
 
                 var videos = [];
                 items.forEach(function (item) {
-                    var titleEl = item.querySelector('.th-title a, .video-title, .film-name') || item.querySelector('a');
-                    var linkEl = item.querySelector('.th-title a, .video-link, .film-link') || item.querySelector('a');
-                    var imgEl = item.querySelector('.th-img img, .video-poster, .film-poster img');
-                    var langEl = item.querySelector('.lang, .language') || item; // Спроба знайти мову
+                    var titleEl = item.querySelector('.th-title a, .video-title, .film-name, .movie-title a') || item.querySelector('a');
+                    var linkEl = item.querySelector('.th-title a, .video-link, .film-link, .movie-link a') || item.querySelector('a');
+                    var imgEl = item.querySelector('.th-img img, .video-poster, .film-poster img, .movie-poster img');
+                    var langEl = item.querySelector('.lang, .language, .lang-label') || item;
 
                     var title = titleEl?.textContent.trim();
                     var link = linkEl?.href;
                     var poster = imgEl?.src || '';
-                    var lang = langEl?.textContent?.toLowerCase().includes('ukraine') || langEl?.textContent?.toLowerCase().includes('українська') || false;
+                    var lang = langEl?.textContent?.toLowerCase().includes('ukraine') || 
+                              langEl?.textContent?.toLowerCase().includes('українська') || 
+                              true; // Спрощуємо: якщо немає явної мови, вважаємо українською
 
-                    if (title && link && lang) {
+                    if (title && link) {
                         videos.push({
                             title: title,
                             url: link,
@@ -106,7 +116,7 @@
                             text: title,
                             source: sourceUrl
                         });
-                        console.log('Added Ukrainian video from ' + sourceUrl + ':', title, link);
+                        console.log('Added video from ' + sourceUrl + ':', title, link);
                     }
                 });
 
@@ -121,7 +131,7 @@
             if (results.length) {
                 this.display(results);
             } else {
-                console.log('No Ukrainian videos found');
+                console.log('No videos found from any source');
                 this.doesNotAnswer();
             }
         };
@@ -129,7 +139,7 @@
         this.getFileUrl = function (file, call) {
             console.log('Fetching stream for:', file.url, 'from source:', file.source);
             network.native(
-                file.url,
+                Defined.proxy + file.url,
                 (response) => {
                     var parser = new DOMParser();
                     var doc = parser.parseFromString(response, 'text/html');
@@ -141,6 +151,8 @@
                         iframe = doc.querySelector('iframe[src*="kinoukr"]') || doc.querySelector('.video-frame');
                     } else if (file.source.includes('filmix')) {
                         iframe = doc.querySelector('iframe[src*="filmix"]') || doc.querySelector('.player-iframe');
+                    } else if (file.source.includes('uakino')) {
+                        iframe = doc.querySelector('iframe[src*="ashdi.vip"]') || doc.querySelector('.movie-player iframe');
                     }
 
                     var streamUrl = iframe?.src || '';
@@ -174,7 +186,7 @@
             videos.forEach(function (element) {
                 var html = Lampa.Template.get('uakino_prestige_full', {
                     title: element.title,
-                    info: element.text,
+                    info: element.text + ' (' + element.source.split('//')[1].split('/')[0] + ')',
                     time: '',
                     quality: 'HD'
                 });
@@ -203,7 +215,7 @@
             scroll.clear();
             var html = Lampa.Template.get('uakino_does_not_answer', {});
             html.find('.online-empty__title').text('Немає результатів');
-            html.find('.online-empty__time').text('Спробуйте пізніше або перевірте фільтр');
+            html.find('.online-empty__time').text('Джерела недоступні або немає українського контенту');
             html.find('.online-empty__buttons').remove();
             scroll.append(html);
             this.loading(false);
@@ -289,7 +301,7 @@
 
         var manifest = {
             type: 'video',
-            version: '1.1',
+            version: '1.2',
             name: 'UAKinoMe',
             description: 'Плагін для перегляду українського контенту з uakino.me, ashdi.vip, kinoukr.me, filmix.ac',
             component: 'uakino'
@@ -298,7 +310,7 @@
         Lampa.Component.add('uakino', component);
         Lampa.Manifest.plugins = manifest;
 
-        var button = '<div class="full-start__button selector view--onlinev" data-subtitle="UAKinoMe v1.1">' +
+        var button = '<div class="full-start__button selector view--onlinev" data-subtitle="UAKinoMe v1.2">' +
             '<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">' +
             '<path d="M8 5v14l11-7z"/>' +
             '</svg><span>Online</span></div>';
