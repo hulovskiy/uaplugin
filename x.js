@@ -3,7 +3,8 @@
 
     var Defined = {
         baseUrl: 'https://4kino.cc/',
-        searchPath: '?do=search&subaction=search&story='
+        searchPath: '?do=search&subaction=search&story=',
+        proxy: 'https://cors-anywhere.herokuapp.com/' // Додаємо проксі для обходу CORS
     };
 
     function component(object) {
@@ -35,12 +36,12 @@
             this.reset();
             var query = object.search || object.movie.title || object.movie.name;
             console.log('Search query:', query);
-            var url = Defined.baseUrl + Defined.searchPath + encodeURIComponent(query);
+            var url = Defined.proxy + Defined.baseUrl + Defined.searchPath + encodeURIComponent(query);
             this.request(url);
         };
 
         this.request = function (url) {
-            console.log('Requesting:', url);
+            console.log('Requesting via proxy:', url);
             network.native(
                 url,
                 (response) => {
@@ -68,6 +69,15 @@
                 var doc = parser.parseFromString(response, 'text/html');
                 var items = doc.querySelectorAll('.item.item-poster.grid-item');
                 console.log('Found items:', items.length);
+
+                if (items.length === 0) {
+                    var noResults = doc.querySelector('.content__main');
+                    if (noResults && noResults.textContent.includes('К сожалению, поиск по сайту не дал никаких результатов')) {
+                        console.log('No search results found on site');
+                        this.doesNotAnswer();
+                        return;
+                    }
+                }
 
                 var videos = [];
                 items.forEach(function (item) {
@@ -108,7 +118,7 @@
         this.getFileUrl = function (file, call) {
             console.log('Fetching stream for:', file.url);
             network.native(
-                file.url,
+                Defined.proxy + file.url,
                 (response) => {
                     var parser = new DOMParser();
                     var doc = parser.parseFromString(response, 'text/html');
@@ -173,7 +183,7 @@
             scroll.clear();
             var html = Lampa.Template.get('kino_does_not_answer', {});
             html.find('.online-empty__title').text('Немає результатів');
-            html.find('.online-empty__time').text('Спробуйте пізніше');
+            html.find('.online-empty__time').text('Спробуйте змінити запит або перевірте підключення');
             html.find('.online-empty__buttons').remove();
             scroll.append(html);
             this.loading(false);
@@ -259,7 +269,7 @@
 
         var manifest = {
             type: 'video',
-            version: '1.0',
+            version: '1.1',
             name: '4Kino',
             description: 'Плагін для перегляду контенту з 4kino.cc у 4K якості',
             component: 'kino'
@@ -268,7 +278,7 @@
         Lampa.Component.add('kino', component);
         Lampa.Manifest.plugins = manifest;
 
-        var button = '<div class="full-start__button selector view--onlinev" data-subtitle="4Kino v1.0">' +
+        var button = '<div class="full-start__button selector view--onlinev" data-subtitle="4Kino v1.1">' +
             '<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">' +
             '<path d="M8 5v14l11-7z"/>' +
             '</svg><span>Online</span></div>';
