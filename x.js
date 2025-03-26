@@ -2,7 +2,7 @@
     'use strict';
 
     var Defined = {
-        baseUrl: 'https://uakino-bay.net/'
+        baseUrl: 'https://uakino.club/'
     };
 
     function component(object) {
@@ -16,7 +16,7 @@
         this.initialize = function () {
             if (initialized) return;
             initialized = true;
-            console.log('Initializing UAKinoBay plugin');
+            console.log('Initializing UAKinoClub plugin');
             this.loading(true);
             filter.onSearch = (value) => Lampa.Activity.replace({ search: value, clarification: true });
             filter.onBack = this.back.bind(this);
@@ -60,19 +60,19 @@
                 var parser = new DOMParser();
                 var doc = parser.parseFromString(response, 'text/html');
                 // Спробуємо кілька можливих селекторів для карток
-                var items = doc.querySelectorAll('.film-item') || 
+                var items = doc.querySelectorAll('.short-story') || 
                             doc.querySelectorAll('.movie') || 
-                            doc.querySelectorAll('.post') || 
+                            doc.querySelectorAll('.film-item') || 
                             doc.querySelectorAll('.item') || [];
-                console.log('Found items with .film-item:', doc.querySelectorAll('.film-item').length);
+                console.log('Found items with .short-story:', doc.querySelectorAll('.short-story').length);
                 console.log('Found items with .movie:', doc.querySelectorAll('.movie').length);
-                console.log('Found items with .post:', doc.querySelectorAll('.post').length);
+                console.log('Found items with .film-item:', doc.querySelectorAll('.film-item').length);
                 console.log('Found items with .item:', doc.querySelectorAll('.item').length);
                 console.log('Total items:', items.length);
 
                 var videos = [];
                 items.forEach(function (item) {
-                    var titleEl = item.querySelector('.title') || item.querySelector('.film-title') || item.querySelector('h2');
+                    var titleEl = item.querySelector('.title') || item.querySelector('h2') || item.querySelector('.film-title');
                     var linkEl = item.querySelector('a[href*="/film/"]') || item.querySelector('a');
                     var imgEl = item.querySelector('img');
                     var title = titleEl?.textContent.trim();
@@ -104,7 +104,7 @@
                 (response) => {
                     var parser = new DOMParser();
                     var doc = parser.parseFromString(response, 'text/html');
-                    var iframe = doc.querySelector('iframe') || doc.querySelector('.player iframe');
+                    var iframe = doc.querySelector('.player iframe') || doc.querySelector('iframe');
                     var streamUrl = iframe?.src || '';
                     console.log('Stream URL:', streamUrl);
                     call({ url: streamUrl });
@@ -241,15 +241,15 @@
         var manifest = {
             type: 'video',
             version: '1.0',
-            name: 'UAKinoBay',
-            description: 'Плагін для перегляду контенту з uakino-bay.net українською',
+            name: 'UAKinoClub',
+            description: 'Плагін для перегляду контенту з uakino.club українською',
             component: 'uakino'
         };
 
         Lampa.Component.add('uakino', component);
         Lampa.Manifest.plugins = manifest;
 
-        var button = '<div class="full-start__button selector view--onlinev" data-subtitle="UAKinoBay v1.0">' +
+        var button = '<div class="full-start__button selector view--onlinev" data-subtitle="UAKinoClub v1.0">' +
             '<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">' +
             '<path d="M8 5v14l11-7z"/>' +
             '</svg><span>Online</span></div>';
@@ -261,7 +261,7 @@
                     Lampa.Component.add('uakino', component);
                     Lampa.Activity.push({
                         url: '',
-                        title: 'UAKinoBay',
+                        title: 'UAKinoClub',
                         component: 'uakino',
                         search: e.data.movie.title,
                         movie: e.data.movie,
