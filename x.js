@@ -89,7 +89,7 @@
                 var doc = parser.parseFromString(response, 'text/html');
                 var items = [];
                 if (sourceUrl.includes('uakino')) {
-                    items = doc.querySelectorAll('.shortstory');
+                    items = doc.querySelectorAll('.shortstory, .search-result-item'); // Оновлено для uakino
                 } else if (sourceUrl.includes('filmix')) {
                     items = doc.querySelectorAll('.search-list .item');
                 } else if (sourceUrl.includes('ashdi')) {
@@ -101,8 +101,8 @@
 
                 var videos = [];
                 items.forEach(function (item) {
-                    var titleEl = item.querySelector('a') || item.querySelector('.title, .name');
-                    var linkEl = item.querySelector('a');
+                    var titleEl = item.querySelector('.title, .name, h1, a') || item.querySelector('a');
+                    var linkEl = item.querySelector('a[href]');
                     var imgEl = item.querySelector('img');
                     var langEl = item.querySelector('.lang, .language') || item;
 
@@ -122,7 +122,7 @@
                             text: title,
                             source: sourceUrl
                         });
-                        console.log('Added video:', title, link);
+                        console.log('Added video from ' + sourceUrl + ':', title, link);
                     }
                 });
                 return videos;
@@ -148,7 +148,8 @@
                 (response) => {
                     var parser = new DOMParser();
                     var doc = parser.parseFromString(response, 'text/html');
-                    var iframe = doc.querySelector('iframe') || doc.querySelector('.player-iframe');
+                    var iframe = doc.querySelector('iframe[src*="player"], iframe[src*="video"], iframe') || 
+                                 doc.querySelector('.player-iframe');
                     var streamUrl = iframe?.src || '';
                     console.log('Stream URL:', streamUrl);
                     if (streamUrl) call({ url: streamUrl });
@@ -204,7 +205,7 @@
             scroll.clear();
             var html = Lampa.Template.get('uakino_does_not_answer', {});
             html.find('.online-empty__title').text('Немає результатів');
-            html.find('.online-empty__time').text('Спробуйте пізніше');
+            html.find('.online-empty__time').text('Джерела недоступні або немає контенту');
             html.find('.online-empty__buttons').remove();
             scroll.append(html);
             this.loading(false);
@@ -290,7 +291,7 @@
 
         var manifest = {
             type: 'video',
-            version: '1.4',
+            version: '1.5',
             name: 'UAKinoMe',
             description: 'Український контент з uakino.me, ashdi.vip, kinoukr.me, filmix.ac',
             component: 'uakino'
@@ -299,7 +300,7 @@
         Lampa.Component.add('uakino', component);
         Lampa.Manifest.plugins = manifest;
 
-        var button = '<div class="full-start__button selector view--onlinev" data-subtitle="UAKinoMe v1.4">' +
+        var button = '<div class="full-start__button selector view--onlinev" data-subtitle="UAKinoMe v1.5">' +
             '<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">' +
             '<path d="M8 5v14l11-7z"/>' +
             '</svg><span>Online</span></div>';
