@@ -16,11 +16,9 @@
         this.initialize = function () {
             if (initialized) return;
             initialized = true;
-
+            console.log('Initializing UASerial plugin');
             this.loading(true);
-            filter.onSearch = (value) => {
-                Lampa.Activity.replace({ search: value, clarification: true });
-            };
+            filter.onSearch = (value) => Lampa.Activity.replace({ search: value, clarification: true });
             filter.onBack = this.back.bind(this);
             scroll.body().addClass('torrent-list');
             files.appendFiles(scroll.render());
@@ -36,14 +34,22 @@
             this.reset();
             var query = object.search || object.movie.title || object.movie.name;
             var url = Defined.baseUrl + '?s=' + encodeURIComponent(query);
+            console.log('Search query:', query);
             this.request(url);
         };
 
         this.request = function (url) {
+            console.log('Requesting:', url);
             network.native(
                 'https://cors-anywhere.herokuapp.com/' + url,
-                this.parse.bind(this),
-                this.doesNotAnswer.bind(this),
+                (response) => {
+                    console.log('Response received:', response.substring(0, 200)); // Перші 200 символів
+                    this.parse(response);
+                },
+                (error) => {
+                    console.log('Request failed:', error);
+                    this.doesNotAnswer();
+                },
                 false,
                 { dataType: 'text' }
             );
@@ -53,53 +59,50 @@
             try {
                 var parser = new DOMParser();
                 var doc = parser.parseFromString(response, 'text/html');
-                // Оновлений селектор для карток контенту
                 var items = doc.querySelectorAll('.movie-item') || [];
+                console.log('Found items:', items.length);
                 var videos = [];
 
                 items.forEach(function (item) {
                     var titleEl = item.querySelector('.movie-title');
                     var linkEl = item.querySelector('a[href*=".html"]');
                     var imgEl = item.querySelector('img');
-
                     var title = titleEl?.textContent.trim();
                     var link = linkEl?.href;
                     var poster = imgEl?.src || '';
 
                     if (title && link) {
-                        videos.push({
-                            title: title,
-                            url: link,
-                            poster: poster,
-                            method: 'call',
-                            text: title
-                        });
+                        videos.push({ title, url: link, poster, method: 'call', text: title });
+                        console.log('Added video:', title, link);
                     }
                 });
 
                 if (videos.length) {
                     this.display(videos);
                 } else {
+                    console.log('No videos found');
                     this.doesNotAnswer();
                 }
             } catch (e) {
-                console.error('UASerial parse error:', e);
+                console.error('Parse error:', e);
                 this.doesNotAnswer();
             }
         };
 
         this.getFileUrl = function (file, call) {
+            console.log('Fetching stream for:', file.url);
             network.native(
                 'https://cors-anywhere.herokuapp.com/' + file.url,
-                function (response) {
+                (response) => {
                     var parser = new DOMParser();
                     var doc = parser.parseFromString(response, 'text/html');
-                    // Оновлений селектор для iframe плеєра
                     var iframe = doc.querySelector('.player iframe') || doc.querySelector('iframe');
                     var streamUrl = iframe?.src || '';
+                    console.log('Stream URL:', streamUrl);
                     call({ url: streamUrl });
                 },
-                function () {
+                (error) => {
+                    console.log('Stream fetch failed:', error);
                     call({ url: '' });
                 },
                 false,
@@ -108,6 +111,7 @@
         };
 
         this.display = function (videos) {
+            console.log('Displaying videos:', videos.length);
             var _this = this;
             scroll.clear();
             videos.forEach(function (element) {
@@ -117,26 +121,20 @@
                     time: '',
                     quality: 'HD'
                 });
-
-                html.on('hover:enter', function () {
-                    _this.getFileUrl(element, function (stream) {
+                html.on('hover:enter', () => {
+                    _this.getFileUrl(element, (stream) => {
                         if (stream.url) {
-                            var play = {
-                                title: element.title,
-                                url: stream.url,
-                                quality: 'HD'
-                            };
+                            var play = { title: element.title, url: stream.url, quality: 'HD' };
                             Lampa.Player.play(play);
                             Lampa.Player.playlist([play]);
                         } else {
                             Lampa.Noty.show('Не вдалося отримати посилання');
                         }
                     });
-                }).on('hover:focus', function (e) {
+                }).on('hover:focus', (e) => {
                     last = e.target;
                     scroll.update($(e.target), true);
                 });
-
                 scroll.append(html);
             });
             Lampa.Controller.enable('content');
@@ -144,6 +142,7 @@
         };
 
         this.doesNotAnswer = function () {
+            console.log('No results to display');
             scroll.clear();
             var html = Lampa.Template.get('uaserial_does_not_answer', {});
             html.find('.online-empty__title').text('Немає результатів');
@@ -167,47 +166,26 @@
             }
         };
 
-        this.create = function () {
-            return files.render();
-        };
-
+        this.create = function () { return files.render(); };
         this.start = function () {
             if (Lampa.Activity.active().activity !== this.activity) return;
             if (!initialized) this.initialize();
             Lampa.Background.immediately(Lampa.Utils.cardImgBackgroundBlur(object.movie));
             Lampa.Controller.add('content', {
-                toggle: function () {
+                toggle: () => {
                     Lampa.Controller.collectionSet(scroll.render(), files.render());
                     Lampa.Controller.collectionFocus(last || false, scroll.render());
                 },
-                up: function () {
-                    if (Navigator.canmove('up')) Navigator.move('up');
-                    else Lampa.Controller.toggle('head');
-                },
-                down: function () {
-                    Navigator.move('down');
-                },
-                right: function () {
-                    if (Navigator.canmove('right')) Navigator.move('right');
-                    else filter.show('Фільтр', 'filter');
-                },
-                left: function () {
-                    if (Navigator.canmove('left')) Navigator.move('left');
-                    else Lampa.Controller.toggle('menu');
-                },
+                up: () => Navigator.canmove('up') ? Navigator.move('up') : Lampa.Controller.toggle('head'),
+                down: () => Navigator.move('down'),
+                right: () => Navigator.canmove('right') ? Navigator.move('right') : filter.show('Фільтр', 'filter'),
+                left: () => Navigator.canmove('left') ? Navigator.move('left') : Lampa.Controller.toggle('menu'),
                 back: this.back.bind(this)
             });
             Lampa.Controller.toggle('content');
         };
-
-        this.back = function () {
-            Lampa.Activity.backward();
-        };
-
-        this.render = function () {
-            return files.render();
-        };
-
+        this.back = function () { Lampa.Activity.backward(); };
+        this.render = function () { return files.render(); };
         this.destroy = function () {
             network.clear();
             files.destroy();
@@ -222,18 +200,9 @@
             <div class="online-empty">
                 <div class="broadcast__scan"><div></div></div>
                 <div class="online-empty__templates">
-                    <div class="online-empty-template">
-                        <div class="online-empty-template__ico"></div>
-                        <div class="online-empty-template__body"></div>
-                    </div>
-                    <div class="online-empty-template">
-                        <div class="online-empty-template__ico"></div>
-                        <div class="online-empty-template__body"></div>
-                    </div>
-                    <div class="online-empty-template">
-                        <div class="online-empty-template__ico"></div>
-                        <div class="online-empty-template__body"></div>
-                    </div>
+                    <div class="online-empty-template"><div class="online-empty-template__ico"></div><div class="online-empty-template__body"></div></div>
+                    <div class="online-empty-template"><div class="online-empty-template__ico"></div><div class="online-empty-template__body"></div></div>
+                    <div class="online-empty-template"><div class="online-empty-template__ico"></div><div class="online-empty-template__body"></div></div>
                 </div>
             </div>
         `);
@@ -277,10 +246,10 @@
             '<path d="M8 5v14l11-7z"/>' +
             '</svg><span>Online</span></div>';
 
-        Lampa.Listener.follow('full', function (e) {
+        Lampa.Listener.follow('full', (e) => {
             if (e.type === 'complite') {
                 var btn = $(button);
-                btn.on('hover:enter', function () {
+                btn.on('hover:enter', () => {
                     Lampa.Component.add('uaserial', component);
                     Lampa.Activity.push({
                         url: '',
