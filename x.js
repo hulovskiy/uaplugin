@@ -2,222 +2,149 @@
     'use strict';
 
     var Defined = {
-        baseUrl: 'https://uakino.me/',
+        api: 'uakino',
+        localhost: 'https://rc.bwa.to/',
         sources: {
-            uakino: { url: 'https://uakino.me/', search: '?do=search&subaction=search&story=' },
-            ashdi: { url: 'https://ashdi.vip/', search: 'vod/search/?wd=' },
-            kinoukr: { url: 'https://kinoukr.me/', search: 'search/?q=' },
-            filmix: { url: 'https://filmix.ac/', search: 'search/?s=' }
+            'uakino': { name: 'UAKino', url: 'https://uakino.me/' },
+            'ashdi': { name: 'Ashdi', url: 'https://ashdi.vip/' },
+            'kinoukr': { name: 'KinoUkr', url: 'https://kinoukr.me/' },
+            'filmix': { name: 'Filmix', url: 'https://filmix.ac/' }
         }
     };
 
+    var unic_id = Lampa.Storage.get('uakino_unic_id', '');
+    if (!unic_id) {
+        unic_id = Lampa.Utils.uid(8).toLowerCase();
+        Lampa.Storage.set('uakino_unic_id', unic_id);
+    }
+
+    function Network() {
+        this.net = new Lampa.Reguest();
+        this.timeout = function(time) { this.net.timeout(time); };
+        this.silent = function(url, success, error) {
+            this.net.silent(url, success, error, false, { headers: { 'Origin': Defined.localhost } });
+        };
+        this.native = function(url, success, error) {
+            this.net.native(url, success, error, false, { 
+                headers: { 
+                    'Origin': Defined.localhost,
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                dataType: 'text'
+            });
+        };
+        this.clear = function() { this.net.clear(); };
+    }
+
     function component(object) {
-        var network = new Lampa.Reguest();
+        var network = new Network();
         var scroll = new Lampa.Scroll({ mask: true, over: true });
         var files = new Lampa.Explorer(object);
         var filter = new Lampa.Filter(object);
-        var initialized = false;
+        var sources = Defined.sources;
+        var filter_sources = Object.keys(sources);
+        var balanser = Lampa.Storage.get('online_balanser', filter_sources[0]);
+        var source = sources[balanser].url;
         var last;
 
-        this.initialize = function () {
-            if (initialized) return;
-            initialized = true;
-            console.log('Initializing UAKinoMe plugin');
+        function account(url) {
+            if (url.indexOf('uid=') === -1) {
+                url = Lampa.Utils.addUrlComponent(url, 'uid=' + encodeURIComponent(unic_id));
+            }
+            return url;
+        }
+
+        this.requestParams = function() {
+            var query = [];
+            query.push('title=' + encodeURIComponent(object.movie.title || object.movie.name));
+            query.push('original_title=' + encodeURIComponent(object.movie.original_title || object.movie.original_name));
+            query.push('year=' + ((object.movie.release_date || object.movie.first_air_date || '0000') + '').slice(0, 4));
+            query.push('serial=' + (object.movie.name ? 1 : 0));
+            if (object.movie.imdb_id) query.push('imdb_id=' + object.movie.imdb_id);
+            if (object.movie.kinopoisk_id) query.push('kinopoisk_id=' + object.movie.kinopoisk_id);
+            return Defined.localhost + 'lite/events?' + query.join('&');
+        };
+
+        this.initialize = function() {
             this.loading(true);
-            filter.onSearch = (value) => Lampa.Activity.replace({ search: value, clarification: true });
-            filter.onBack = this.back.bind(this);
             scroll.body().addClass('torrent-list');
             files.appendFiles(scroll.render());
             files.appendHead(filter.render());
-            scroll.minus(files.render().find('.explorer__files-head'));
-            scroll.body().append(Lampa.Template.get('uakino_content_loading'));
+            scroll.body().append(Lampa.Template.get('lampac_content_loading'));
             Lampa.Controller.enable('content');
-            this.loading(false);
             this.search();
         };
 
-        this.search = function () {
-            this.reset();
-            var query = object.search || object.movie.title || object.movie.name;
-            console.log('Search query:', query);
-            this.requestFromSources(query);
+        this.search = function() {
+            var url = this.requestParams();
+            network.timeout(15000);
+            network.native(account(url), this.parse.bind(this), this.doesNotAnswer.bind(this));
         };
 
-        this.requestFromSources = function (query) {
-            var _this = this;
-            var sources = Object.keys(Defined.sources);
-            var results = [];
-            var completed = 0;
-
-            sources.forEach(function (sourceKey) {
-                var source = Defined.sources[sourceKey];
-                var url = source.url + source.search + encodeURIComponent(query);
-                console.log('Requesting from:', source.url, 'URL:', url);
-
-                network.silent(
-                    url,
-                    (response) => {
-                        console.log('Response from ' + source.url + ':', response.substring(0, 200));
-                        var parsed = _this.parse(response, source.url);
-                        results = results.concat(parsed);
-                        completed++;
-                        if (completed === sources.length) {
-                            _this.processResults(results);
-                        }
-                    },
-                    (error) => {
-                        console.log('Request failed for ' + source.url + ':', error);
-                        completed++;
-                        if (completed === sources.length) {
-                            _this.processResults(results);
-                        }
-                    },
-                    false,
-                    {
-                        dataType: 'text',
-                        headers: {
-                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-                        }
-                    }
-                );
-            });
-        };
-
-        this.parse = function (response, sourceUrl) {
+        this.parse = function(data) {
             try {
-                var parser = new DOMParser();
-                var doc = parser.parseFromString(response, 'text/html');
-                var items = [];
-                if (sourceUrl.includes('uakino')) {
-                    items = doc.querySelectorAll('.shortstory, .search-result-item'); // Оновлено для uakino
-                } else if (sourceUrl.includes('filmix')) {
-                    items = doc.querySelectorAll('.search-list .item');
-                } else if (sourceUrl.includes('ashdi')) {
-                    items = doc.querySelectorAll('.vodlist_item');
-                } else if (sourceUrl.includes('kinoukr')) {
-                    items = doc.querySelectorAll('.movie-item');
+                var json = Lampa.Arrays.decodeJson(data, {});
+                if (!json || !json.online) {
+                    this.doesNotAnswer('No valid data');
+                    return;
                 }
-                console.log('Found items from ' + sourceUrl + ':', items.length);
 
-                var videos = [];
-                items.forEach(function (item) {
-                    var titleEl = item.querySelector('.title, .name, h1, a') || item.querySelector('a');
-                    var linkEl = item.querySelector('a[href]');
-                    var imgEl = item.querySelector('img');
-                    var langEl = item.querySelector('.lang, .language') || item;
-
-                    var title = titleEl?.textContent.trim();
-                    var link = linkEl?.href;
-                    var poster = imgEl?.src || '';
-                    var lang = langEl?.textContent?.toLowerCase().includes('ukraine') || 
-                              langEl?.textContent?.toLowerCase().includes('українська') || 
-                              true;
-
-                    if (title && link) {
-                        videos.push({
-                            title: title,
-                            url: link,
-                            poster: poster,
-                            method: 'call',
-                            text: title,
-                            source: sourceUrl
-                        });
-                        console.log('Added video from ' + sourceUrl + ':', title, link);
-                    }
+                var videos = json.online.filter(function(v) {
+                    return v.url && (v.method === 'play' || v.method === 'call');
                 });
-                return videos;
-            } catch (e) {
-                console.error('Parse error from ' + sourceUrl + ':', e);
-                return [];
-            }
-        };
 
-        this.processResults = function (results) {
-            if (results.length) {
-                this.display(results);
-            } else {
-                console.log('No videos found');
-                this.doesNotAnswer();
-            }
-        };
-
-        this.getFileUrl = function (file, call) {
-            console.log('Fetching stream for:', file.url);
-            network.silent(
-                file.url,
-                (response) => {
-                    var parser = new DOMParser();
-                    var doc = parser.parseFromString(response, 'text/html');
-                    var iframe = doc.querySelector('iframe[src*="player"], iframe[src*="video"], iframe') || 
-                                 doc.querySelector('.player-iframe');
-                    var streamUrl = iframe?.src || '';
-                    console.log('Stream URL:', streamUrl);
-                    if (streamUrl) call({ url: streamUrl });
-                    else call({ url: '' });
-                },
-                (error) => {
-                    console.log('Stream fetch failed:', error);
-                    call({ url: '' });
-                },
-                false,
-                {
-                    dataType: 'text',
-                    headers: {
-                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-                    }
+                if (videos.length) {
+                    this.display(videos);
+                } else {
+                    this.empty();
                 }
-            );
+            } catch (e) {
+                console.log('UAKinoMe', 'Parse error:', e);
+                this.doesNotAnswer(e);
+            }
         };
 
-        this.display = function (videos) {
-            console.log('Displaying videos:', videos.length);
-            var _this = this;
+        this.display = function(videos) {
             scroll.clear();
-            videos.forEach(function (element) {
-                var html = Lampa.Template.get('uakino_prestige_full', {
-                    title: element.title,
-                    info: element.text + ' (' + element.source.split('//')[1].split('/')[0] + ')',
-                    time: '',
+            videos.forEach(function(video) {
+                var html = Lampa.Template.get('lampac_prestige_full', {
+                    title: video.title || object.movie.title,
+                    info: sources[balanser].name,
+                    time: video.quality ? video.quality + 'p' : '',
                     quality: 'HD'
                 });
-                html.on('hover:enter', () => {
-                    _this.getFileUrl(element, (stream) => {
-                        if (stream.url) {
-                            var play = { title: element.title, url: stream.url, quality: 'HD' };
-                            Lampa.Player.play(play);
-                            Lampa.Player.playlist([play]);
-                        } else {
-                            Lampa.Noty.show('Не вдалося отримати посилання');
-                        }
-                    });
-                }).on('hover:focus', (e) => {
+                html.on('hover:enter', function() {
+                    Lampa.Player.play({ url: video.url, title: video.title });
+                    Lampa.Player.playlist([{ url: video.url, title: video.title }]);
+                });
+                html.on('hover:focus', function(e) {
                     last = e.target;
                     scroll.update($(e.target), true);
                 });
                 scroll.append(html);
             });
-            Lampa.Controller.enable('content');
             this.loading(false);
+            Lampa.Controller.enable('content');
         };
 
-        this.doesNotAnswer = function () {
-            console.log('No results to display');
+        this.empty = function() {
             scroll.clear();
-            var html = Lampa.Template.get('uakino_does_not_answer', {});
-            html.find('.online-empty__title').text('Немає результатів');
-            html.find('.online-empty__time').text('Джерела недоступні або немає контенту');
-            html.find('.online-empty__buttons').remove();
+            var html = Lampa.Template.get('lampac_does_not_answer', {});
+            html.find('.online-empty__title').text('Немає доступного контенту');
             scroll.append(html);
             this.loading(false);
         };
 
-        this.reset = function () {
-            network.clear();
+        this.doesNotAnswer = function(error) {
             scroll.clear();
-            scroll.body().append(Lampa.Template.get('uakino_content_loading'));
+            var html = Lampa.Template.get('lampac_does_not_answer', {});
+            html.find('.online-empty__title').text('Помилка сервера');
+            html.find('.online-empty__time').text(typeof error === 'string' ? error : 'Невідома помилка');
+            scroll.append(html);
+            this.loading(false);
         };
 
-        this.loading = function (status) {
+        this.loading = function(status) {
             if (status) this.activity.loader(true);
             else {
                 this.activity.loader(false);
@@ -225,27 +152,24 @@
             }
         };
 
-        this.create = function () { return files.render(); };
-        this.start = function () {
-            if (Lampa.Activity.active().activity !== this.activity) return;
-            if (!initialized) this.initialize();
-            Lampa.Background.immediately(Lampa.Utils.cardImgBackgroundBlur(object.movie));
+        this.start = function() {
+            if (!this.initialize) this.initialize();
             Lampa.Controller.add('content', {
-                toggle: () => {
+                toggle: function() {
                     Lampa.Controller.collectionSet(scroll.render(), files.render());
                     Lampa.Controller.collectionFocus(last || false, scroll.render());
                 },
-                up: () => Navigator.canmove('up') ? Navigator.move('up') : Lampa.Controller.toggle('head'),
-                down: () => Navigator.move('down'),
-                right: () => Navigator.canmove('right') ? Navigator.move('right') : filter.show('Фільтр', 'filter'),
-                left: () => Navigator.canmove('left') ? Navigator.move('left') : Lampa.Controller.toggle('menu'),
-                back: this.back.bind(this)
+                up: function() { Navigator.move('up') || Lampa.Controller.toggle('head'); },
+                down: function() { Navigator.move('down'); },
+                right: function() { Navigator.move('right') || filter.show('Фільтр', 'filter'); },
+                left: function() { Navigator.move('left') || Lampa.Controller.toggle('menu'); },
+                back: function() { Lampa.Activity.backward(); }
             });
             Lampa.Controller.toggle('content');
         };
-        this.back = function () { Lampa.Activity.backward(); };
-        this.render = function () { return files.render(); };
-        this.destroy = function () {
+
+        this.render = function() { return files.render(); };
+        this.destroy = function() {
             network.clear();
             files.destroy();
             scroll.destroy();
@@ -254,19 +178,23 @@
 
     function startPlugin() {
         window.uakino_plugin = true;
+        var manifest = {
+            type: 'video',
+            version: '1.1',
+            name: 'UAKinoMe',
+            description: 'Український контент з uakino.me, ashdi.vip, kinoukr.me, filmix.ac'
+        };
 
-        Lampa.Template.add('uakino_content_loading', `
+        Lampa.Component.add('uakino', component);
+        Lampa.Manifest.plugins = manifest;
+
+        Lampa.Template.add('lampac_content_loading', `
             <div class="online-empty">
                 <div class="broadcast__scan"><div></div></div>
-                <div class="online-empty__templates">
-                    <div class="online-empty-template"><div class="online-empty-template__ico"></div><div class="online-empty-template__body"></div></div>
-                    <div class="online-empty-template"><div class="online-empty-template__ico"></div><div class="online-empty-template__body"></div></div>
-                    <div class="online-empty-template"><div class="online-empty-template__ico"></div><div class="online-empty-template__body"></div></div>
-                </div>
             </div>
         `);
 
-        Lampa.Template.add('uakino_prestige_full', `
+        Lampa.Template.add('lampac_prestige_full', `
             <div class="online-prestige online-prestige--full selector">
                 <div class="online-prestige__body">
                     <div class="online-prestige__head">
@@ -281,34 +209,21 @@
             </div>
         `);
 
-        Lampa.Template.add('uakino_does_not_answer', `
+        Lampa.Template.add('lampac_does_not_answer', `
             <div class="online-empty">
                 <div class="online-empty__title"></div>
                 <div class="online-empty__time"></div>
-                <div class="online-empty__buttons"></div>
             </div>
         `);
 
-        var manifest = {
-            type: 'video',
-            version: '1.5',
-            name: 'UAKinoMe',
-            description: 'Український контент з uakino.me, ashdi.vip, kinoukr.me, filmix.ac',
-            component: 'uakino'
-        };
+        var button = '<div class="full-start__button selector view--online" data-subtitle="UAKinoMe v1.1">' +
+            '<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>' +
+            '<span>Онлайн</span></div>';
 
-        Lampa.Component.add('uakino', component);
-        Lampa.Manifest.plugins = manifest;
-
-        var button = '<div class="full-start__button selector view--onlinev" data-subtitle="UAKinoMe v1.5">' +
-            '<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">' +
-            '<path d="M8 5v14l11-7z"/>' +
-            '</svg><span>Online</span></div>';
-
-        Lampa.Listener.follow('full', (e) => {
+        Lampa.Listener.follow('full', function(e) {
             if (e.type === 'complite') {
                 var btn = $(button);
-                btn.on('hover:enter', () => {
+                btn.on('hover:enter', function() {
                     Lampa.Component.add('uakino', component);
                     Lampa.Activity.push({
                         url: '',
@@ -319,7 +234,7 @@
                         page: 1
                     });
                 });
-                e.object.activity.render().find('.view--torrent').before(btn);
+                e.object.activity.render().find('.view--torrent').after(btn);
             }
         });
     }
