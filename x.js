@@ -5,10 +5,10 @@
         api: 'uakino',
         localhost: 'https://rc.bwa.to/',
         sources: {
-            'uakino': { name: 'UAKino', url: 'https://uakino.me/' },
-            'ashdi': { name: 'Ashdi', url: 'https://ashdi.vip/' },
-            'kinoukr': { name: 'KinoUkr', url: 'https://kinoukr.me/' },
-            'filmix': { name: 'Filmix', url: 'https://filmix.ac/' }
+            'uakino': { name: 'UAKino', url: 'https://uakino.me/', search: '?do=search&subaction=search&story=' },
+            'ashdi': { name: 'Ashdi', url: 'https://ashdi.vip/', search: 'vod/search/?wd=' },
+            'kinoukr': { name: 'KinoUkr', url: 'https://kinoukr.me/', search: 'search/?q=' },
+            'filmix': { name: 'Filmix', url: 'https://filmix.ac/', search: 'search/?s=' }
         }
     };
 
@@ -22,14 +22,13 @@
         this.net = new Lampa.Reguest();
         this.timeout = function(time) { this.net.timeout(time); };
         this.silent = function(url, success, error) {
-            this.net.silent(url, success, error, false, { headers: { 'Origin': Defined.localhost } });
+            this.net.silent(url, success, error, false, {
+                headers: { 'Origin': Defined.localhost, 'X-Requested-With': 'XMLHttpRequest' }
+            });
         };
         this.native = function(url, success, error) {
-            this.net.native(url, success, error, false, { 
-                headers: { 
-                    'Origin': Defined.localhost,
-                    'X-Requested-With': 'XMLHttpRequest'
-                },
+            this.net.native(url, success, error, false, {
+                headers: { 'Origin': Defined.localhost, 'X-Requested-With': 'XMLHttpRequest' },
                 dataType: 'text'
             });
         };
@@ -44,29 +43,24 @@
         var sources = Defined.sources;
         var filter_sources = Object.keys(sources);
         var balanser = Lampa.Storage.get('online_balanser', filter_sources[0]);
-        var source = sources[balanser].url;
         var last;
 
         function account(url) {
-            if (url.indexOf('uid=') === -1) {
-                url = Lampa.Utils.addUrlComponent(url, 'uid=' + encodeURIComponent(unic_id));
-            }
-            return url;
+            return Lampa.Utils.addUrlComponent(url, 'uid=' + encodeURIComponent(unic_id));
         }
 
         this.requestParams = function() {
             var query = [];
-            query.push('title=' + encodeURIComponent(object.movie.title || object.movie.name));
-            query.push('original_title=' + encodeURIComponent(object.movie.original_title || object.movie.original_name));
+            var title = object.movie.title || object.movie.name;
+            query.push('query=' + encodeURIComponent(title));
             query.push('year=' + ((object.movie.release_date || object.movie.first_air_date || '0000') + '').slice(0, 4));
-            query.push('serial=' + (object.movie.name ? 1 : 0));
-            if (object.movie.imdb_id) query.push('imdb_id=' + object.movie.imdb_id);
-            if (object.movie.kinopoisk_id) query.push('kinopoisk_id=' + object.movie.kinopoisk_id);
-            return Defined.localhost + 'lite/events?' + query.join('&');
+            query.push('type=' + (object.movie.name ? 'series' : 'movie'));
+            if (object.movie.imdb_id) query.push('imdb=' + object.movie.imdb_id);
+            if (object.movie.kinopoisk_id) query.push('kp=' + object.movie.kinopoisk_id);
+            return Defined.localhost + 'search?' + query.join('&');
         };
 
         this.initialize = function() {
-            this.loading(true);
             scroll.body().addClass('torrent-list');
             files.appendFiles(scroll.render());
             files.appendHead(filter.render());
@@ -77,20 +71,20 @@
 
         this.search = function() {
             var url = this.requestParams();
-            network.timeout(15000);
-            network.native(account(url), this.parse.bind(this), this.doesNotAnswer.bind(this));
+            network.timeout(10000);
+            network.silent(account(url), this.parse.bind(this), this.doesNotAnswer.bind(this));
         };
 
         this.parse = function(data) {
             try {
                 var json = Lampa.Arrays.decodeJson(data, {});
-                if (!json || !json.online) {
+                if (!json || !json.results) {
                     this.doesNotAnswer('No valid data');
                     return;
                 }
 
-                var videos = json.online.filter(function(v) {
-                    return v.url && (v.method === 'play' || v.method === 'call');
+                var videos = json.results.filter(function(v) {
+                    return v.url && v.source && filter_sources.includes(v.source);
                 });
 
                 if (videos.length) {
@@ -109,7 +103,7 @@
             videos.forEach(function(video) {
                 var html = Lampa.Template.get('lampac_prestige_full', {
                     title: video.title || object.movie.title,
-                    info: sources[balanser].name,
+                    info: sources[video.source]?.name || video.source,
                     time: video.quality ? video.quality + 'p' : '',
                     quality: 'HD'
                 });
@@ -139,7 +133,7 @@
             scroll.clear();
             var html = Lampa.Template.get('lampac_does_not_answer', {});
             html.find('.online-empty__title').text('Помилка сервера');
-            html.find('.online-empty__time').text(typeof error === 'string' ? error : 'Невідома помилка');
+            html.find('.online-empty__time').text(typeof error === 'string' ? error : '404 Not Found');
             scroll.append(html);
             this.loading(false);
         };
@@ -180,7 +174,7 @@
         window.uakino_plugin = true;
         var manifest = {
             type: 'video',
-            version: '1.1',
+            version: '1.2',
             name: 'UAKinoMe',
             description: 'Український контент з uakino.me, ashdi.vip, kinoukr.me, filmix.ac'
         };
@@ -216,7 +210,7 @@
             </div>
         `);
 
-        var button = '<div class="full-start__button selector view--online" data-subtitle="UAKinoMe v1.1">' +
+        var button = '<div class="full-start__button selector view--online" data-subtitle="UAKinoMe v1.2">' +
             '<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>' +
             '<span>Онлайн</span></div>';
 
