@@ -2,7 +2,7 @@
     'use strict';
 
     var Defined = {
-        baseUrl: 'https://uakino.club/'
+        baseUrl: 'https://uakino.me/'
     };
 
     function component(object) {
@@ -16,7 +16,7 @@
         this.initialize = function () {
             if (initialized) return;
             initialized = true;
-            console.log('Initializing UAKinoClub plugin');
+            console.log('Initializing UAKinoMe plugin');
             this.loading(true);
             filter.onSearch = (value) => Lampa.Activity.replace({ search: value, clarification: true });
             filter.onBack = this.back.bind(this);
@@ -33,7 +33,7 @@
         this.search = function () {
             this.reset();
             var query = object.search || object.movie.title || object.movie.name;
-            var url = Defined.baseUrl + '?s=' + encodeURIComponent(query);
+            var url = Defined.baseUrl + '?do=search&subaction=search&story=' + encodeURIComponent(query);
             console.log('Search query:', query);
             this.request(url);
         };
@@ -59,7 +59,7 @@
             try {
                 var parser = new DOMParser();
                 var doc = parser.parseFromString(response, 'text/html');
-                // Спробуємо кілька можливих селекторів для карток
+                // Спробуємо кілька селекторів для карток
                 var items = doc.querySelectorAll('.short-story') || 
                             doc.querySelectorAll('.movie') || 
                             doc.querySelectorAll('.film-item') || 
@@ -241,15 +241,15 @@
         var manifest = {
             type: 'video',
             version: '1.0',
-            name: 'UAKinoClub',
-            description: 'Плагін для перегляду контенту з uakino.club українською',
+            name: 'UAKinoMe',
+            description: 'Плагін для перегляду контенту з uakino.me українською',
             component: 'uakino'
         };
 
         Lampa.Component.add('uakino', component);
         Lampa.Manifest.plugins = manifest;
 
-        var button = '<div class="full-start__button selector view--onlinev" data-subtitle="UAKinoClub v1.0">' +
+        var button = '<div class="full-start__button selector view--onlinev" data-subtitle="UAKinoMe v1.0">' +
             '<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">' +
             '<path d="M8 5v14l11-7z"/>' +
             '</svg><span>Online</span></div>';
@@ -261,7 +261,7 @@
                     Lampa.Component.add('uakino', component);
                     Lampa.Activity.push({
                         url: '',
-                        title: 'UAKinoClub',
+                        title: 'UAKinoMe',
                         component: 'uakino',
                         search: e.data.movie.title,
                         movie: e.data.movie,
