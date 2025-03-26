@@ -59,22 +59,14 @@
             try {
                 var parser = new DOMParser();
                 var doc = parser.parseFromString(response, 'text/html');
-                // Спробуємо кілька селекторів для карток
-                var items = doc.querySelectorAll('.short-story') || 
-                            doc.querySelectorAll('.movie') || 
-                            doc.querySelectorAll('.film-item') || 
-                            doc.querySelectorAll('.item') || [];
-                console.log('Found items with .short-story:', doc.querySelectorAll('.short-story').length);
-                console.log('Found items with .movie:', doc.querySelectorAll('.movie').length);
-                console.log('Found items with .film-item:', doc.querySelectorAll('.film-item').length);
-                console.log('Found items with .item:', doc.querySelectorAll('.item').length);
-                console.log('Total items:', items.length);
+                var items = doc.querySelectorAll('.shortstory');
+                console.log('Found items with .shortstory:', items.length);
 
                 var videos = [];
                 items.forEach(function (item) {
-                    var titleEl = item.querySelector('.title') || item.querySelector('h2') || item.querySelector('.film-title');
-                    var linkEl = item.querySelector('a[href*="/film/"]') || item.querySelector('a');
-                    var imgEl = item.querySelector('img');
+                    var titleEl = item.querySelector('.th-title a');
+                    var linkEl = item.querySelector('.th-title a') || item.querySelector('.th-img a');
+                    var imgEl = item.querySelector('.th-img img');
                     var title = titleEl?.textContent.trim();
                     var link = linkEl?.href;
                     var poster = imgEl?.src || '';
@@ -104,10 +96,15 @@
                 (response) => {
                     var parser = new DOMParser();
                     var doc = parser.parseFromString(response, 'text/html');
-                    var iframe = doc.querySelector('.player iframe') || doc.querySelector('iframe');
+                    var iframe = doc.querySelector('iframe[src*="ashdi.vip"]') || doc.querySelector('.movie-player iframe') || doc.querySelector('iframe');
                     var streamUrl = iframe?.src || '';
                     console.log('Stream URL:', streamUrl);
-                    call({ url: streamUrl });
+                    if (streamUrl) {
+                        call({ url: streamUrl });
+                    } else {
+                        console.log('No valid stream URL found');
+                        call({ url: '' });
+                    }
                 },
                 (error) => {
                     console.log('Stream fetch failed:', error);
