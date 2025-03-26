@@ -2,7 +2,12 @@
     'use strict';
 
     var Defined = {
-        baseUrl: 'https://uakino.me/'
+        baseUrl: 'https://uakino.me/',
+        sources: {
+            ashdi: 'https://ashdi.vip/',
+            kinoukr: 'https://kinoukr.me/',
+            filmix: 'https://filmix.ac/'
+        }
     };
 
     function component(object) {
@@ -16,7 +21,7 @@
         this.initialize = function () {
             if (initialized) return;
             initialized = true;
-            console.log('Initializing UAKinoMe plugin');
+            console.log('Initializing UAKinoMe plugin with Ukrainian sources');
             this.loading(true);
             filter.onSearch = (value) => Lampa.Activity.replace({ search: value, clarification: true });
             filter.onBack = this.back.bind(this);
@@ -33,87 +38,122 @@
         this.search = function () {
             this.reset();
             var query = object.search || object.movie.title || object.movie.name;
-            var url = Defined.baseUrl + '?do=search&subaction=search&story=' + encodeURIComponent(query);
             console.log('Search query:', query);
-            this.request(url);
+            this.requestFromSources(query);
         };
 
-        this.request = function (url) {
-            console.log('Requesting:', url);
-            network.native(
-                url,  // Прямий запит без cors-anywhere
-                (response) => {
-                    console.log('Response received:', response.substring(0, 200));
-                    this.parse(response);
-                },
-                (error) => {
-                    console.log('Request failed:', error);
-                    this.doesNotAnswer();
-                },
-                false,
-                {
-                    dataType: 'text',
-                    headers: {
-                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8'
+        this.requestFromSources = function (query) {
+            var _this = this;
+            var sources = Object.values(Defined.sources);
+            var results = [];
+
+            sources.forEach(function (sourceUrl, index) {
+                var url = sourceUrl + (sourceUrl.includes('uakino') ? '?do=search&subaction=search&story=' : 'search?q=') + encodeURIComponent(query);
+                console.log('Requesting from:', sourceUrl);
+                network.native(
+                    url,
+                    (response) => {
+                        console.log('Response from ' + sourceUrl + ':', response.substring(0, 200));
+                        var parsed = _this.parse(response, sourceUrl);
+                        results = results.concat(parsed);
+                        if (index === sources.length - 1) {
+                            _this.processResults(results);
+                        }
+                    },
+                    (error) => {
+                        console.log('Request failed for ' + sourceUrl + ':', error);
+                        if (index === sources.length - 1) {
+                            _this.processResults(results);
+                        }
+                    },
+                    false,
+                    {
+                        dataType: 'text',
+                        headers: {
+                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8'
+                        }
                     }
-                }
-            );
+                );
+            });
         };
 
-        this.parse = function (response) {
+        this.parse = function (response, sourceUrl) {
             try {
                 var parser = new DOMParser();
                 var doc = parser.parseFromString(response, 'text/html');
-                var items = doc.querySelectorAll('.shortstory');
-                console.log('Found items with .shortstory:', items.length);
+                var items = doc.querySelectorAll('.shortstory, .video-item, .film-item'); // Адаптивний селектор для різних джерел
+                console.log('Found items from ' + sourceUrl + ':', items.length);
 
                 var videos = [];
                 items.forEach(function (item) {
-                    var titleEl = item.querySelector('.th-title a');
-                    var linkEl = item.querySelector('.th-title a') || item.querySelector('.th-img a');
-                    var imgEl = item.querySelector('.th-img img');
+                    var titleEl = item.querySelector('.th-title a, .video-title, .film-name') || item.querySelector('a');
+                    var linkEl = item.querySelector('.th-title a, .video-link, .film-link') || item.querySelector('a');
+                    var imgEl = item.querySelector('.th-img img, .video-poster, .film-poster img');
+                    var langEl = item.querySelector('.lang, .language') || item; // Спроба знайти мову
+
                     var title = titleEl?.textContent.trim();
                     var link = linkEl?.href;
                     var poster = imgEl?.src || '';
+                    var lang = langEl?.textContent?.toLowerCase().includes('ukraine') || langEl?.textContent?.toLowerCase().includes('українська') || false;
 
-                    if (title && link) {
-                        videos.push({ title, url: link, poster, method: 'call', text: title });
-                        console.log('Added video:', title, link);
+                    if (title && link && lang) {
+                        videos.push({
+                            title: title,
+                            url: link,
+                            poster: poster,
+                            method: 'call',
+                            text: title,
+                            source: sourceUrl
+                        });
+                        console.log('Added Ukrainian video from ' + sourceUrl + ':', title, link);
                     }
                 });
 
-                if (videos.length) {
-                    this.display(videos);
-                } else {
-                    console.log('No videos found');
-                    this.doesNotAnswer();
-                }
+                return videos;
             } catch (e) {
-                console.error('Parse error:', e);
+                console.error('Parse error from ' + sourceUrl + ':', e);
+                return [];
+            }
+        };
+
+        this.processResults = function (results) {
+            if (results.length) {
+                this.display(results);
+            } else {
+                console.log('No Ukrainian videos found');
                 this.doesNotAnswer();
             }
         };
 
         this.getFileUrl = function (file, call) {
-            console.log('Fetching stream for:', file.url);
+            console.log('Fetching stream for:', file.url, 'from source:', file.source);
             network.native(
-                file.url,  // Прямий запит без cors-anywhere
+                file.url,
                 (response) => {
                     var parser = new DOMParser();
                     var doc = parser.parseFromString(response, 'text/html');
-                    var iframe = doc.querySelector('iframe[src*="ashdi.vip"]') || doc.querySelector('.movie-player iframe') || doc.querySelector('iframe');
+                    var iframe = null;
+
+                    if (file.source.includes('ashdi')) {
+                        iframe = doc.querySelector('iframe[src*="ashdi.vip"]') || doc.querySelector('.movie-player iframe');
+                    } else if (file.source.includes('kinoukr')) {
+                        iframe = doc.querySelector('iframe[src*="kinoukr"]') || doc.querySelector('.video-frame');
+                    } else if (file.source.includes('filmix')) {
+                        iframe = doc.querySelector('iframe[src*="filmix"]') || doc.querySelector('.player-iframe');
+                    }
+
                     var streamUrl = iframe?.src || '';
-                    console.log('Stream URL:', streamUrl);
+                    console.log('Stream URL from ' + file.source + ':', streamUrl);
                     if (streamUrl) {
                         call({ url: streamUrl });
                     } else {
-                        console.log('No valid stream URL found');
+                        console.log('No valid stream URL found from ' + file.source);
                         call({ url: '' });
                     }
                 },
                 (error) => {
-                    console.log('Stream fetch failed:', error);
+                    console.log('Stream fetch failed from ' + file.source + ':', error);
                     call({ url: '' });
                 },
                 false,
@@ -163,7 +203,7 @@
             scroll.clear();
             var html = Lampa.Template.get('uakino_does_not_answer', {});
             html.find('.online-empty__title').text('Немає результатів');
-            html.find('.online-empty__time').text('Спробуйте пізніше');
+            html.find('.online-empty__time').text('Спробуйте пізніше або перевірте фільтр');
             html.find('.online-empty__buttons').remove();
             scroll.append(html);
             this.loading(false);
@@ -249,16 +289,16 @@
 
         var manifest = {
             type: 'video',
-            version: '1.0',
+            version: '1.1',
             name: 'UAKinoMe',
-            description: 'Плагін для перегляду контенту з uakino.me українською',
+            description: 'Плагін для перегляду українського контенту з uakino.me, ashdi.vip, kinoukr.me, filmix.ac',
             component: 'uakino'
         };
 
         Lampa.Component.add('uakino', component);
         Lampa.Manifest.plugins = manifest;
 
-        var button = '<div class="full-start__button selector view--onlinev" data-subtitle="UAKinoMe v1.0">' +
+        var button = '<div class="full-start__button selector view--onlinev" data-subtitle="UAKinoMe v1.1">' +
             '<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">' +
             '<path d="M8 5v14l11-7z"/>' +
             '</svg><span>Online</span></div>';
