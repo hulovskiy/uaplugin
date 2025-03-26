@@ -1,12 +1,10 @@
 (function () {
     'use strict';
 
-    // Конфігурація
     var Defined = {
         baseUrl: 'https://uaserial.com/'
     };
 
-    // Компонент плагіна
     function component(object) {
         var network = new Lampa.Reguest();
         var scroll = new Lampa.Scroll({ mask: true, over: true });
@@ -15,17 +13,13 @@
         var initialized = false;
         var last;
 
-        // Ініціалізація
         this.initialize = function () {
             if (initialized) return;
             initialized = true;
 
             this.loading(true);
-            filter.onSearch = function (value) {
-                Lampa.Activity.replace({
-                    search: value,
-                    clarification: true
-                });
+            filter.onSearch = (value) => {
+                Lampa.Activity.replace({ search: value, clarification: true });
             };
             filter.onBack = this.back.bind(this);
             scroll.body().addClass('torrent-list');
@@ -38,15 +32,13 @@
             this.search();
         };
 
-        // Пошук
         this.search = function () {
             this.reset();
-            // Оскільки пошуку немає, беремо головну сторінку
-            var url = Defined.baseUrl;
+            var query = object.search || object.movie.title || object.movie.name;
+            var url = Defined.baseUrl + '?s=' + encodeURIComponent(query);
             this.request(url);
         };
 
-        // Запит до сайту
         this.request = function (url) {
             network.native(
                 'https://cors-anywhere.herokuapp.com/' + url,
@@ -57,28 +49,28 @@
             );
         };
 
-        // Парсинг результатів
         this.parse = function (response) {
             try {
                 var parser = new DOMParser();
                 var doc = parser.parseFromString(response, 'text/html');
-                var items = doc.querySelectorAll('.serial-item') || []; // Змінено на ймовірний селектор
+                // Оновлений селектор для карток контенту
+                var items = doc.querySelectorAll('.movie-item') || [];
                 var videos = [];
-                var query = (object.search || object.movie.title || object.movie.name).toLowerCase();
 
                 items.forEach(function (item) {
-                    var titleEl = item.querySelector('.serial-title');
+                    var titleEl = item.querySelector('.movie-title');
                     var linkEl = item.querySelector('a[href*=".html"]');
                     var imgEl = item.querySelector('img');
 
                     var title = titleEl?.textContent.trim();
                     var link = linkEl?.href;
+                    var poster = imgEl?.src || '';
 
-                    if (title && link && title.toLowerCase().includes(query)) {
+                    if (title && link) {
                         videos.push({
                             title: title,
                             url: link,
-                            poster: imgEl?.src || '',
+                            poster: poster,
                             method: 'call',
                             text: title
                         });
@@ -96,14 +88,14 @@
             }
         };
 
-        // Отримання URL потоку
         this.getFileUrl = function (file, call) {
             network.native(
                 'https://cors-anywhere.herokuapp.com/' + file.url,
                 function (response) {
                     var parser = new DOMParser();
                     var doc = parser.parseFromString(response, 'text/html');
-                    var iframe = doc.querySelector('.player-container iframe') || doc.querySelector('iframe'); // Адаптуйте селектор
+                    // Оновлений селектор для iframe плеєра
+                    var iframe = doc.querySelector('.player iframe') || doc.querySelector('iframe');
                     var streamUrl = iframe?.src || '';
                     call({ url: streamUrl });
                 },
@@ -115,7 +107,6 @@
             );
         };
 
-        // Відображення результатів
         this.display = function (videos) {
             var _this = this;
             scroll.clear();
@@ -152,7 +143,6 @@
             this.loading(false);
         };
 
-        // Помилка
         this.doesNotAnswer = function () {
             scroll.clear();
             var html = Lampa.Template.get('uaserial_does_not_answer', {});
@@ -163,14 +153,12 @@
             this.loading(false);
         };
 
-        // Очистка
         this.reset = function () {
             network.clear();
             scroll.clear();
             scroll.body().append(Lampa.Template.get('uaserial_content_loading'));
         };
 
-        // Завантаження
         this.loading = function (status) {
             if (status) this.activity.loader(true);
             else {
@@ -179,16 +167,13 @@
             }
         };
 
-        // Рендеринг
         this.create = function () {
             return files.render();
         };
 
         this.start = function () {
             if (Lampa.Activity.active().activity !== this.activity) return;
-            if (!initialized) {
-                this.initialize();
-            }
+            if (!initialized) this.initialize();
             Lampa.Background.immediately(Lampa.Utils.cardImgBackgroundBlur(object.movie));
             Lampa.Controller.add('content', {
                 toggle: function () {
@@ -230,11 +215,9 @@
         };
     }
 
-    // Запуск плагіна
     function startPlugin() {
         window.uaserial_plugin = true;
 
-        // Додавання шаблонів
         Lampa.Template.add('uaserial_content_loading', `
             <div class="online-empty">
                 <div class="broadcast__scan"><div></div></div>
@@ -278,19 +261,17 @@
             </div>
         `);
 
-        // Маніфест плагіна
         var manifest = {
             type: 'video',
             version: '1.0',
             name: 'UASerial',
-            description: 'Плагін для перегляду контенту з uaserial.com',
+            description: 'Плагін для перегляду контенту з uaserial.com українською',
             component: 'uaserial'
         };
 
         Lampa.Component.add('uaserial', component);
         Lampa.Manifest.plugins = manifest;
 
-        // Кнопка
         var button = '<div class="full-start__button selector view--onlinev" data-subtitle="UASerial v1.0">' +
             '<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">' +
             '<path d="M8 5v14l11-7z"/>' +
