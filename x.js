@@ -4,12 +4,11 @@
     var Defined = {
         baseUrl: 'https://uakino.me/',
         sources: {
-            uakino: 'https://uakino.me/',
-            ashdi: 'https://ashdi.vip/',
-            kinoukr: 'https://kinoukr.me/',
-            filmix: 'https://filmix.ac/'
-        },
-        proxy: 'https://cors-anywhere.herokuapp.com/' // Додано проксі для обходу CORS
+            uakino: { url: 'https://uakino.me/', search: '?do=search&subaction=search&story=' },
+            ashdi: { url: 'https://ashdi.vip/', search: 'vod/search/?wd=' },
+            kinoukr: { url: 'https://kinoukr.me/', search: 'search/?q=' },
+            filmix: { url: 'https://filmix.ac/', search: 'search/?s=' }
+        }
     };
 
     function component(object) {
@@ -23,7 +22,7 @@
         this.initialize = function () {
             if (initialized) return;
             initialized = true;
-            console.log('Initializing UAKinoMe plugin with Ukrainian sources');
+            console.log('Initializing UAKinoMe plugin');
             this.loading(true);
             filter.onSearch = (value) => Lampa.Activity.replace({ search: value, clarification: true });
             filter.onBack = this.back.bind(this);
@@ -51,16 +50,15 @@
             var completed = 0;
 
             sources.forEach(function (sourceKey) {
-                var sourceUrl = Defined.sources[sourceKey];
-                var searchPath = sourceKey === 'uakino' ? '?do=search&subaction=search&story=' : 'search?q=';
-                var url = Defined.proxy + sourceUrl + searchPath + encodeURIComponent(query);
-                console.log('Requesting from:', sourceUrl, 'via proxy:', url);
+                var source = Defined.sources[sourceKey];
+                var url = source.url + source.search + encodeURIComponent(query);
+                console.log('Requesting from:', source.url, 'URL:', url);
 
-                network.native(
+                network.silent(
                     url,
                     (response) => {
-                        console.log('Response from ' + sourceUrl + ':', response.substring(0, 200));
-                        var parsed = _this.parse(response, sourceUrl);
+                        console.log('Response from ' + source.url + ':', response.substring(0, 200));
+                        var parsed = _this.parse(response, source.url);
                         results = results.concat(parsed);
                         completed++;
                         if (completed === sources.length) {
@@ -68,7 +66,7 @@
                         }
                     },
                     (error) => {
-                        console.log('Request failed for ' + sourceUrl + ':', error);
+                        console.log('Request failed for ' + source.url + ':', error);
                         completed++;
                         if (completed === sources.length) {
                             _this.processResults(results);
@@ -78,8 +76,7 @@
                     {
                         dataType: 'text',
                         headers: {
-                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-                            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8'
+                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
                         }
                     }
                 );
@@ -90,22 +87,31 @@
             try {
                 var parser = new DOMParser();
                 var doc = parser.parseFromString(response, 'text/html');
-                var items = doc.querySelectorAll('.shortstory, .video-item, .film-item, .movie-item') || [];
+                var items = [];
+                if (sourceUrl.includes('uakino')) {
+                    items = doc.querySelectorAll('.shortstory');
+                } else if (sourceUrl.includes('filmix')) {
+                    items = doc.querySelectorAll('.search-list .item');
+                } else if (sourceUrl.includes('ashdi')) {
+                    items = doc.querySelectorAll('.vodlist_item');
+                } else if (sourceUrl.includes('kinoukr')) {
+                    items = doc.querySelectorAll('.movie-item');
+                }
                 console.log('Found items from ' + sourceUrl + ':', items.length);
 
                 var videos = [];
                 items.forEach(function (item) {
-                    var titleEl = item.querySelector('.th-title a, .video-title, .film-name, .movie-title a') || item.querySelector('a');
-                    var linkEl = item.querySelector('.th-title a, .video-link, .film-link, .movie-link a') || item.querySelector('a');
-                    var imgEl = item.querySelector('.th-img img, .video-poster, .film-poster img, .movie-poster img');
-                    var langEl = item.querySelector('.lang, .language, .lang-label') || item;
+                    var titleEl = item.querySelector('a') || item.querySelector('.title, .name');
+                    var linkEl = item.querySelector('a');
+                    var imgEl = item.querySelector('img');
+                    var langEl = item.querySelector('.lang, .language') || item;
 
                     var title = titleEl?.textContent.trim();
                     var link = linkEl?.href;
                     var poster = imgEl?.src || '';
                     var lang = langEl?.textContent?.toLowerCase().includes('ukraine') || 
                               langEl?.textContent?.toLowerCase().includes('українська') || 
-                              true; // Спрощуємо: якщо немає явної мови, вважаємо українською
+                              true;
 
                     if (title && link) {
                         videos.push({
@@ -116,10 +122,9 @@
                             text: title,
                             source: sourceUrl
                         });
-                        console.log('Added video from ' + sourceUrl + ':', title, link);
+                        console.log('Added video:', title, link);
                     }
                 });
-
                 return videos;
             } catch (e) {
                 console.error('Parse error from ' + sourceUrl + ':', e);
@@ -131,49 +136,33 @@
             if (results.length) {
                 this.display(results);
             } else {
-                console.log('No videos found from any source');
+                console.log('No videos found');
                 this.doesNotAnswer();
             }
         };
 
         this.getFileUrl = function (file, call) {
-            console.log('Fetching stream for:', file.url, 'from source:', file.source);
-            network.native(
-                Defined.proxy + file.url,
+            console.log('Fetching stream for:', file.url);
+            network.silent(
+                file.url,
                 (response) => {
                     var parser = new DOMParser();
                     var doc = parser.parseFromString(response, 'text/html');
-                    var iframe = null;
-
-                    if (file.source.includes('ashdi')) {
-                        iframe = doc.querySelector('iframe[src*="ashdi.vip"]') || doc.querySelector('.movie-player iframe');
-                    } else if (file.source.includes('kinoukr')) {
-                        iframe = doc.querySelector('iframe[src*="kinoukr"]') || doc.querySelector('.video-frame');
-                    } else if (file.source.includes('filmix')) {
-                        iframe = doc.querySelector('iframe[src*="filmix"]') || doc.querySelector('.player-iframe');
-                    } else if (file.source.includes('uakino')) {
-                        iframe = doc.querySelector('iframe[src*="ashdi.vip"]') || doc.querySelector('.movie-player iframe');
-                    }
-
+                    var iframe = doc.querySelector('iframe') || doc.querySelector('.player-iframe');
                     var streamUrl = iframe?.src || '';
-                    console.log('Stream URL from ' + file.source + ':', streamUrl);
-                    if (streamUrl) {
-                        call({ url: streamUrl });
-                    } else {
-                        console.log('No valid stream URL found from ' + file.source);
-                        call({ url: '' });
-                    }
+                    console.log('Stream URL:', streamUrl);
+                    if (streamUrl) call({ url: streamUrl });
+                    else call({ url: '' });
                 },
                 (error) => {
-                    console.log('Stream fetch failed from ' + file.source + ':', error);
+                    console.log('Stream fetch failed:', error);
                     call({ url: '' });
                 },
                 false,
                 {
                     dataType: 'text',
                     headers: {
-                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8'
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
                     }
                 }
             );
@@ -215,7 +204,7 @@
             scroll.clear();
             var html = Lampa.Template.get('uakino_does_not_answer', {});
             html.find('.online-empty__title').text('Немає результатів');
-            html.find('.online-empty__time').text('Джерела недоступні або немає українського контенту');
+            html.find('.online-empty__time').text('Спробуйте пізніше');
             html.find('.online-empty__buttons').remove();
             scroll.append(html);
             this.loading(false);
@@ -301,16 +290,16 @@
 
         var manifest = {
             type: 'video',
-            version: '1.2',
+            version: '1.4',
             name: 'UAKinoMe',
-            description: 'Плагін для перегляду українського контенту з uakino.me, ashdi.vip, kinoukr.me, filmix.ac',
+            description: 'Український контент з uakino.me, ashdi.vip, kinoukr.me, filmix.ac',
             component: 'uakino'
         };
 
         Lampa.Component.add('uakino', component);
         Lampa.Manifest.plugins = manifest;
 
-        var button = '<div class="full-start__button selector view--onlinev" data-subtitle="UAKinoMe v1.2">' +
+        var button = '<div class="full-start__button selector view--onlinev" data-subtitle="UAKinoMe v1.4">' +
             '<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">' +
             '<path d="M8 5v14l11-7z"/>' +
             '</svg><span>Online</span></div>';
