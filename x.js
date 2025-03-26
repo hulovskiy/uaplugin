@@ -2,7 +2,7 @@
     'use strict';
 
     var Defined = {
-        baseUrl: 'https://uaserial.com/'
+        baseUrl: 'https://uakino-bay.net/'
     };
 
     function component(object) {
@@ -16,7 +16,7 @@
         this.initialize = function () {
             if (initialized) return;
             initialized = true;
-            console.log('Initializing UASerial plugin');
+            console.log('Initializing UAKinoBay plugin');
             this.loading(true);
             filter.onSearch = (value) => Lampa.Activity.replace({ search: value, clarification: true });
             filter.onBack = this.back.bind(this);
@@ -24,7 +24,7 @@
             files.appendFiles(scroll.render());
             files.appendHead(filter.render());
             scroll.minus(files.render().find('.explorer__files-head'));
-            scroll.body().append(Lampa.Template.get('uaserial_content_loading'));
+            scroll.body().append(Lampa.Template.get('uakino_content_loading'));
             Lampa.Controller.enable('content');
             this.loading(false);
             this.search();
@@ -43,7 +43,7 @@
             network.native(
                 'https://cors-anywhere.herokuapp.com/' + url,
                 (response) => {
-                    console.log('Response received:', response.substring(0, 200)); // Перші 200 символів
+                    console.log('Response received:', response.substring(0, 200));
                     this.parse(response);
                 },
                 (error) => {
@@ -59,13 +59,21 @@
             try {
                 var parser = new DOMParser();
                 var doc = parser.parseFromString(response, 'text/html');
-                var items = doc.querySelectorAll('.movie-item') || [];
-                console.log('Found items:', items.length);
-                var videos = [];
+                // Спробуємо кілька можливих селекторів для карток
+                var items = doc.querySelectorAll('.film-item') || 
+                            doc.querySelectorAll('.movie') || 
+                            doc.querySelectorAll('.post') || 
+                            doc.querySelectorAll('.item') || [];
+                console.log('Found items with .film-item:', doc.querySelectorAll('.film-item').length);
+                console.log('Found items with .movie:', doc.querySelectorAll('.movie').length);
+                console.log('Found items with .post:', doc.querySelectorAll('.post').length);
+                console.log('Found items with .item:', doc.querySelectorAll('.item').length);
+                console.log('Total items:', items.length);
 
+                var videos = [];
                 items.forEach(function (item) {
-                    var titleEl = item.querySelector('.movie-title');
-                    var linkEl = item.querySelector('a[href*=".html"]');
+                    var titleEl = item.querySelector('.title') || item.querySelector('.film-title') || item.querySelector('h2');
+                    var linkEl = item.querySelector('a[href*="/film/"]') || item.querySelector('a');
                     var imgEl = item.querySelector('img');
                     var title = titleEl?.textContent.trim();
                     var link = linkEl?.href;
@@ -96,7 +104,7 @@
                 (response) => {
                     var parser = new DOMParser();
                     var doc = parser.parseFromString(response, 'text/html');
-                    var iframe = doc.querySelector('.player iframe') || doc.querySelector('iframe');
+                    var iframe = doc.querySelector('iframe') || doc.querySelector('.player iframe');
                     var streamUrl = iframe?.src || '';
                     console.log('Stream URL:', streamUrl);
                     call({ url: streamUrl });
@@ -115,7 +123,7 @@
             var _this = this;
             scroll.clear();
             videos.forEach(function (element) {
-                var html = Lampa.Template.get('uaserial_prestige_full', {
+                var html = Lampa.Template.get('uakino_prestige_full', {
                     title: element.title,
                     info: element.text,
                     time: '',
@@ -144,7 +152,7 @@
         this.doesNotAnswer = function () {
             console.log('No results to display');
             scroll.clear();
-            var html = Lampa.Template.get('uaserial_does_not_answer', {});
+            var html = Lampa.Template.get('uakino_does_not_answer', {});
             html.find('.online-empty__title').text('Немає результатів');
             html.find('.online-empty__time').text('Спробуйте пізніше');
             html.find('.online-empty__buttons').remove();
@@ -155,7 +163,7 @@
         this.reset = function () {
             network.clear();
             scroll.clear();
-            scroll.body().append(Lampa.Template.get('uaserial_content_loading'));
+            scroll.body().append(Lampa.Template.get('uakino_content_loading'));
         };
 
         this.loading = function (status) {
@@ -194,9 +202,9 @@
     }
 
     function startPlugin() {
-        window.uaserial_plugin = true;
+        window.uakino_plugin = true;
 
-        Lampa.Template.add('uaserial_content_loading', `
+        Lampa.Template.add('uakino_content_loading', `
             <div class="online-empty">
                 <div class="broadcast__scan"><div></div></div>
                 <div class="online-empty__templates">
@@ -207,7 +215,7 @@
             </div>
         `);
 
-        Lampa.Template.add('uaserial_prestige_full', `
+        Lampa.Template.add('uakino_prestige_full', `
             <div class="online-prestige online-prestige--full selector">
                 <div class="online-prestige__body">
                     <div class="online-prestige__head">
@@ -222,7 +230,7 @@
             </div>
         `);
 
-        Lampa.Template.add('uaserial_does_not_answer', `
+        Lampa.Template.add('uakino_does_not_answer', `
             <div class="online-empty">
                 <div class="online-empty__title"></div>
                 <div class="online-empty__time"></div>
@@ -233,15 +241,15 @@
         var manifest = {
             type: 'video',
             version: '1.0',
-            name: 'UASerial',
-            description: 'Плагін для перегляду контенту з uaserial.com українською',
-            component: 'uaserial'
+            name: 'UAKinoBay',
+            description: 'Плагін для перегляду контенту з uakino-bay.net українською',
+            component: 'uakino'
         };
 
-        Lampa.Component.add('uaserial', component);
+        Lampa.Component.add('uakino', component);
         Lampa.Manifest.plugins = manifest;
 
-        var button = '<div class="full-start__button selector view--onlinev" data-subtitle="UASerial v1.0">' +
+        var button = '<div class="full-start__button selector view--onlinev" data-subtitle="UAKinoBay v1.0">' +
             '<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">' +
             '<path d="M8 5v14l11-7z"/>' +
             '</svg><span>Online</span></div>';
@@ -250,11 +258,11 @@
             if (e.type === 'complite') {
                 var btn = $(button);
                 btn.on('hover:enter', () => {
-                    Lampa.Component.add('uaserial', component);
+                    Lampa.Component.add('uakino', component);
                     Lampa.Activity.push({
                         url: '',
-                        title: 'UASerial',
-                        component: 'uaserial',
+                        title: 'UAKinoBay',
+                        component: 'uakino',
                         search: e.data.movie.title,
                         movie: e.data.movie,
                         page: 1
@@ -265,5 +273,5 @@
         });
     }
 
-    if (!window.uaserial_plugin) startPlugin();
+    if (!window.uakino_plugin) startPlugin();
 })();
