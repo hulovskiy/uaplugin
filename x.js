@@ -41,7 +41,7 @@
         this.request = function (url) {
             console.log('Requesting:', url);
             network.native(
-                'https://cors-anywhere.herokuapp.com/' + url,
+                url,  // Прямий запит без cors-anywhere
                 (response) => {
                     console.log('Response received:', response.substring(0, 200));
                     this.parse(response);
@@ -98,7 +98,7 @@
         this.getFileUrl = function (file, call) {
             console.log('Fetching stream for:', file.url);
             network.native(
-                'https://cors-anywhere.herokuapp.com/' + file.url,
+                file.url,  // Прямий запит без cors-anywhere
                 (response) => {
                     var parser = new DOMParser();
                     var doc = parser.parseFromString(response, 'text/html');
